@@ -781,6 +781,7 @@
                 <div class="flex gap-2">
                     <button onclick="exportDataToFile()" class="px-3 py-2 rounded-md text-xs text-gray-600 border border-gray-300 hover:bg-gray-100">Export Data (.json)</button>
                     <button onclick="triggerImportDataFile()" class="px-3 py-2 rounded-md text-xs text-gray-600 border border-gray-300 hover:bg-gray-100">Import Data (.json)</button>
+                    <button onclick="resetAllSchedules()" class="px-3 py-2 rounded-md text-xs text-red-600 border border-red-200 hover:bg-red-50">Reset All Schedules</button>
                 </div>
                 <div class="flex gap-3">
                     <button onclick="cancelDataSetup()" class="px-4 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
@@ -1167,6 +1168,35 @@
 
         function triggerImportDataFile() {
             document.getElementById('import-data-file-input').click();
+        }
+
+        // "Reset All Schedules" — wipes every TA's placed classes and stats back to
+        // empty (for everyone, since this is shared data), but leaves the TA list,
+        // Student list, and Class Needs untouched. Meant for clearing out old
+        // test/demo placements, or starting a fresh term. Requires an explicit
+        // "Save Changes" afterwards to actually push the clean slate to the cloud —
+        // this only clears it locally first, same as every other change here.
+        function resetAllSchedules() {
+            const confirmed = confirm(
+                "Reset ALL TA timetables?\n\n" +
+                "This clears every TA's placed classes and their absence/cover stats " +
+                "back to empty — for everyone, since this is shared data. Your TA list, " +
+                "Student list, and Class Needs are NOT affected.\n\n" +
+                "You can Ctrl+Z right after this if you change your mind, but once you " +
+                "press \"Save Changes\" afterwards, everyone will see the cleared timetables.\n\n" +
+                "Continue?"
+            );
+            if (!confirmed) return;
+
+            pushUndoSnapshot();
+            taDatabase.forEach(ta => {
+                ta.timetables = { A: {}, B: {} };
+                ta.stats = { absences: 0, coversProvided: 0, basePeriods: 25 };
+            });
+            refreshWholeUI();
+            saveStateToStorage();
+            closeDataModal();
+            alert('All schedules cleared locally. Press "Save Changes" to push this to everyone.');
         }
 
         function importDataFromFile(fileInput) {
