@@ -285,23 +285,23 @@
 <body class="h-screen overflow-hidden flex flex-col">
 
     <!-- Navbar -->
-    <nav class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0 shadow-sm">
-        <div class="flex items-center gap-3">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <nav class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-5 shrink-0 shadow-sm gap-4">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <h1 class="text-xl font-bold text-gray-800">TA Timetable Manager</h1>
-            <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium ml-2">New Academic Year</span>
-            <div class="flex items-center gap-1.5 ml-3 pl-3 border-l border-gray-200" title="Cloud sync connection status">
-                <span id="connection-status-dot" class="inline-block w-2.5 h-2.5 rounded-full bg-gray-300"></span>
-                <span id="connection-status-label" class="text-xs text-gray-500">Local only</span>
-                <span id="cloud-status-hint" class="hidden text-xs text-amber-600 font-medium">— newer data available, click Refresh from Cloud</span>
-            </div>
+            <h1 class="text-lg font-bold text-gray-800 whitespace-nowrap hidden lg:block">TA Timetable Manager</h1>
+            <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap hidden xl:inline-block">New Academic Year</span>
+            <button onclick="refreshFromCloud()" title="Click to check for updates from the shared cloud data" class="flex items-center gap-1.5 ml-1 pl-3 border-l border-gray-200 hover:bg-gray-50 rounded-r-md py-1 pr-2 transition-colors">
+                <span id="connection-status-dot" class="inline-block w-2.5 h-2.5 rounded-full bg-gray-300 shrink-0"></span>
+                <span id="connection-status-label" class="text-xs text-gray-500 whitespace-nowrap">Local only</span>
+            </button>
+            <span id="cloud-status-hint" class="hidden text-xs text-amber-600 font-medium whitespace-nowrap">Newer data available — click to refresh</span>
         </div>
-        
-        <div class="flex items-center gap-4">
-            <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-600">Current TA:</span>
+
+        <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-1.5">
+                <span class="text-sm font-medium text-gray-600 hidden md:inline">TA:</span>
                 <select id="ta-selector" onchange="switchActiveTA(this.value)" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 font-semibold">
                     <option value="andrew" selected>Andrew</option>
                     <option value="anisa">Anisa</option>
@@ -320,35 +320,53 @@
                     <option value="umaira">Umaira</option>
                 </select>
             </div>
-            
-            <button onclick="openDataModal()" class="bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+
+            <div class="w-px h-6 bg-gray-200 mx-1"></div>
+
+            <!-- Undo / Redo -->
+            <div class="flex items-center gap-1">
+                <button id="undo-btn" onclick="performUndo()" title="Undo (Ctrl+Z)" disabled class="p-2.5 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors opacity-30 cursor-not-allowed">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4-4 4-4m-4 4h11a4 4 0 010 8h-1" />
+                    </svg>
+                </button>
+                <button id="redo-btn" onclick="performRedo()" title="Redo (Ctrl+Shift+Z)" disabled class="p-2.5 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors opacity-30 cursor-not-allowed">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 14l4-4-4-4m4 4H8a4 4 0 000 8h1" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="w-px h-6 bg-gray-200 mx-1"></div>
+
+            <!-- Secondary tools: icon-only with tooltips, grouped together -->
+            <div class="flex items-center gap-1">
+                <button onclick="openStatsModal()" title="Stats Dashboard" class="p-2.5 rounded-md border border-transparent hover:bg-indigo-50 hover:border-indigo-200 text-indigo-700 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                </button>
+                <button onclick="exportTimetableToPDF()" title="Export PDF" class="p-2.5 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </button>
+                <button onclick="autoScheduleActiveTA()" title="Auto-Schedule (Demo)" class="p-2.5 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="w-px h-6 bg-gray-200 mx-1"></div>
+
+            <button onclick="openDataModal()" class="bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 px-3.5 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h3m-3-4l4 4-4 4m-6 4a4 4 0 01-4-4V7a4 4 0 014-4h6" />
                 </svg>
-                Data Setup
+                <span class="hidden md:inline">Data Setup</span>
             </button>
-            <button onclick="openStatsModal()" class="bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                Stats Dashboard
-            </button>
-            <button onclick="exportTimetableToPDF()" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Export PDF
-            </button>
-            <button onclick="autoScheduleActiveTA()" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                Auto-Schedule (Demo)
-            </button>
-            <button onclick="refreshFromCloud()" title="Pull the latest shared data without reloading the page" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Refresh from Cloud
-            </button>
-            <button onclick="saveAllChanges()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+            <button onclick="saveAllChanges()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm whitespace-nowrap">
                 Save Changes
             </button>
         </div>
@@ -765,7 +783,7 @@
                     <button onclick="triggerImportDataFile()" class="px-3 py-2 rounded-md text-xs text-gray-600 border border-gray-300 hover:bg-gray-100">Import Data (.json)</button>
                 </div>
                 <div class="flex gap-3">
-                    <button onclick="closeDataModal()" class="px-4 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
+                    <button onclick="cancelDataSetup()" class="px-4 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
                     <button onclick="applyDataChanges()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">Apply Changes</button>
                 </div>
             </div>
@@ -820,8 +838,8 @@
 
         // Fill these in after creating your Supabase project (Project Settings > API).
         // Leave both blank to run in local-only (localStorage) mode.
-        const SUPABASE_URL = 'https://srcbcgfcxhgmlfjgihap.supabase.co';        // e.g. 'https://xxxxxxxx.supabase.co'
-        const SUPABASE_ANON_KEY = 'sb_publishable_FLiAt8e-4tHdxLGGnuFtDw_NGpdVBy1';   // the public "anon" key — safe to expose in client code
+        const SUPABASE_URL = '';        // e.g. 'https://xxxxxxxx.supabase.co'
+        const SUPABASE_ANON_KEY = '';   // the public "anon" key — safe to expose in client code
                                         // ONLY because Row Level Security policies control what it can do (see setup notes)
         const CLOUD_POLL_INTERVAL_MS = 20000; // how often the status light re-checks the connection
         const SUPABASE_ROW_ID = 1; // singleton row — the whole app's shared state lives in one row
@@ -873,6 +891,68 @@
                 currentActiveTA: currentActiveTA,
                 savedAt: new Date().toISOString()
             };
+        }
+
+        // ---- Undo / Redo ----
+        // Whole-state snapshots (deep-cloned via JSON round-trip), pushed BEFORE a
+        // user action mutates anything. "Save Changes" never clears this stack —
+        // it only persists whatever the current state is, so undo keeps working
+        // across a save exactly like it does before one.
+        const MAX_UNDO_HISTORY = 25;
+        let undoStack = [];
+        let redoStack = [];
+        let isRestoringState = false; // guards against snapshotting during undo/redo itself
+
+        function deepCloneState() {
+            return JSON.parse(JSON.stringify(buildStateSnapshot()));
+        }
+
+        // Call this once, right before a user action starts mutating state.
+        function pushUndoSnapshot() {
+            if (isRestoringState) return;
+            undoStack.push(deepCloneState());
+            if (undoStack.length > MAX_UNDO_HISTORY) undoStack.shift();
+            redoStack.length = 0; // a fresh action invalidates whatever redo history existed
+            updateUndoRedoButtons();
+        }
+
+        function performUndo() {
+            if (!undoStack.length) return;
+            isRestoringState = true;
+            redoStack.push(deepCloneState());
+            const prev = undoStack.pop();
+            applyLoadedState(prev);
+            refreshWholeUI();
+            saveStateToStorage(); // keep the local cache consistent; cloud is untouched until an explicit Save
+            isRestoringState = false;
+            updateUndoRedoButtons();
+        }
+
+        function performRedo() {
+            if (!redoStack.length) return;
+            isRestoringState = true;
+            undoStack.push(deepCloneState());
+            const next = redoStack.pop();
+            applyLoadedState(next);
+            refreshWholeUI();
+            saveStateToStorage();
+            isRestoringState = false;
+            updateUndoRedoButtons();
+        }
+
+        function updateUndoRedoButtons() {
+            const undoBtn = document.getElementById('undo-btn');
+            const redoBtn = document.getElementById('redo-btn');
+            if (undoBtn) {
+                undoBtn.disabled = undoStack.length === 0;
+                undoBtn.classList.toggle('opacity-30', undoStack.length === 0);
+                undoBtn.classList.toggle('cursor-not-allowed', undoStack.length === 0);
+            }
+            if (redoBtn) {
+                redoBtn.disabled = redoStack.length === 0;
+                redoBtn.classList.toggle('opacity-30', redoStack.length === 0);
+                redoBtn.classList.toggle('cursor-not-allowed', redoStack.length === 0);
+            }
         }
 
         function saveStateToStorage() {
@@ -2208,6 +2288,140 @@
             });
         }
 
+        // Scan every TA's saved timetable for an entry whose classData satisfies
+        // `predicate` — used to detect "this class period is already placed on
+        // someone's timetable" so it doesn't get offered again in the sidebar
+        // (which would let the same real period be assigned twice).
+        function findAssignedEntry(predicate) {
+            for (const ta of taDatabase) {
+                if (!ta.timetables) continue;
+                for (const week of ['A', 'B']) {
+                    const weekData = ta.timetables[week];
+                    if (!weekData) continue;
+                    for (const day of Object.keys(weekData)) {
+                        const dayData = weekData[day];
+                        for (const period of Object.keys(dayData)) {
+                            const entry = dayData[period];
+                            if (!entry || !entry.classData) continue;
+                            let cd;
+                            try { cd = JSON.parse(entry.classData); } catch (e) { continue; }
+                            if (predicate(cd)) {
+                                return { ta, week, day, period, classData: cd };
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function isClassNeedAssigned(needId) {
+            if (!needId) return false;
+            return !!findAssignedEntry(cd => cd.needId === needId);
+        }
+
+        function isStudentPeriodAssigned(studentId, week, day, period) {
+            if (!studentId) return false;
+            return !!findAssignedEntry(cd =>
+                cd.studentId === studentId && cd.week === week && cd.day === day && cd.period === period);
+        }
+
+        // Sweep every TA's saved timetable and clear out any entry whose classData
+        // matches `predicate` — used when a Class Need or Student is deleted in
+        // Data Setup, so an already-placed copy of it doesn't get stranded on some
+        // TA's timetable with no way to remove it (its source record is gone, so
+        // "return to unassigned" would have nowhere real to put it back).
+        function removeAssignmentsMatching(predicate) {
+            taDatabase.forEach(ta => {
+                if (!ta.timetables) return;
+                ['A', 'B'].forEach(week => {
+                    const weekData = ta.timetables[week];
+                    if (!weekData) return;
+                    Object.keys(weekData).forEach(day => {
+                        const dayData = weekData[day];
+                        Object.keys(dayData).forEach(period => {
+                            const entry = dayData[period];
+                            if (!entry || !entry.classData) return;
+                            let cd;
+                            try { cd = JSON.parse(entry.classData); } catch (e) { return; }
+                            if (predicate(cd)) {
+                                delete dayData[period];
+                            }
+                        });
+                    });
+                });
+            });
+        }
+
+        // Walk every TA's saved timetable, applying `updater(classData)` (returns
+        // the new classData) to every entry matching `predicate` — the shared
+        // engine behind the real-time Data Setup → card sync below.
+        function updateAssignmentsMatching(predicate, updater) {
+            let touchedActiveTA = false;
+            taDatabase.forEach(ta => {
+                if (!ta.timetables) return;
+                ['A', 'B'].forEach(week => {
+                    const weekData = ta.timetables[week];
+                    if (!weekData) return;
+                    Object.keys(weekData).forEach(day => {
+                        const dayData = weekData[day];
+                        Object.keys(dayData).forEach(period => {
+                            const entry = dayData[period];
+                            if (!entry || !entry.classData) return;
+                            let cd;
+                            try { cd = JSON.parse(entry.classData); } catch (e) { return; }
+                            if (!predicate(cd)) return;
+                            const updatedCd = updater(cd);
+                            entry.classData = JSON.stringify(updatedCd);
+                            entry.html = buildAssignedBlockHtml(updatedCd);
+                            if (ta.id === currentActiveTA) touchedActiveTA = true;
+                        });
+                    });
+                });
+            });
+            // Only worth a full re-render if the TA currently on screen was affected
+            if (touchedActiveTA) loadTimetableForActiveTA();
+        }
+
+        // The canonical markup for an assigned class-block — used both by the live
+        // Data Setup sync below (rewriting a stored entry.html after an edit) and
+        // kept visually identical to what dragging a card in produces.
+        function buildAssignedBlockHtml(cd) {
+            const dataAttr = escapeHtml(JSON.stringify(cd));
+            return `<div class="class-block w-full h-full" draggable="true" id="assigned-${Date.now()}-${Math.floor(Math.random() * 100000)}" data-class-data="${dataAttr}">
+                <span class="class-title">${escapeHtml(cd.title)}</span>
+                <div class="class-detail mt-auto flex justify-between"><span>${escapeHtml(cd.teacher || '')}</span><span>${escapeHtml(cd.room || '')}</span></div>
+            </div>`;
+        }
+
+        // Real-time sync: called as soon as a Class Need's fields change in Data
+        // Setup, so a copy already placed on some TA's timetable updates
+        // immediately too — no need to wait for "Apply Changes".
+        function syncAssignedBlocksForNeed(needId) {
+            const item = classNeedsData.find(i => i.id === needId);
+            if (!item) return;
+            updateAssignmentsMatching(
+                cd => cd.needId === needId,
+                cd => Object.assign({}, cd, { title: item.title, teacher: item.teacher, room: item.room, skills: parseTags(item.tags) })
+            );
+        }
+
+        // Same idea, but for a student: re-derives every one of their already-placed
+        // periods from their current entries (and current name), since one edit to
+        // a student can affect several placed cards at once.
+        function syncAssignedBlocksForStudent(studentId) {
+            const student = studentTimetables.find(s => s.id === studentId);
+            if (!student) return;
+            updateAssignmentsMatching(
+                cd => cd.studentId === studentId,
+                cd => {
+                    const cell = student.entries[cd.week] && student.entries[cd.week][cd.day] && student.entries[cd.week][cd.day][cd.period];
+                    if (!cell) return cd; // that period's data was cleared — leave the placed copy as-is
+                    return Object.assign({}, cd, { title: cell.code, teacher: cell.teacher, room: cell.room, student: student.name });
+                }
+            );
+        }
+
         // Render the given TA's timetable into the on-screen cells
         function loadTimetableForActiveTA() {
             const ta = taDatabase.find(t => t.id === currentActiveTA);
@@ -2299,15 +2513,31 @@
             return true;
         }
 
+        // True if this placed block's source (a Class Need or Student) was since
+        // deleted in Data Setup — meaning there's nowhere real left to return it to.
+        function isBlockOrphaned(block) {
+            let cd = {};
+            try { cd = JSON.parse(block.dataset.classData || '{}'); } catch (e) {}
+            return !!(
+                (cd.needId && !classNeedsData.some(item => item.id === cd.needId)) ||
+                (cd.studentId && !studentTimetables.some(s => s.id === cd.studentId))
+            );
+        }
+
         // Right-click cancel: confirm, then send an assigned class-block back to its
-        // unassigned zone, the same place dragging it back by hand would send it.
+        // unassigned zone, the same place dragging it back by hand would send it —
+        // unless its source (the Class Need or Student) was since deleted in Data
+        // Setup, in which case there's nowhere real to return it to, so it's just
+        // removed outright instead of leaving a stranded "orphan" card behind.
         function cancelPlacement(block) {
             if (!block || !block.dataset.classData) return;
             const cell = block.closest('.drop-zone');
             if (!cell) return;
             const confirmed = confirm('Cancel this placement and return it to the unassigned list?');
             if (!confirmed) return;
-            if (returnToUnassigned(block)) {
+
+            pushUndoSnapshot();
+            if (isBlockOrphaned(block) || returnToUnassigned(block)) {
                 block.remove();
                 cell.classList.add('empty');
                 cell.innerHTML = emptyCellContent(cell);
@@ -2513,6 +2743,7 @@
         }
 
         function createManualClassBlock(cell, code, teacher, room) {
+            pushUndoSnapshot();
             const block = document.createElement('div');
             block.className = 'class-block w-full h-full';
             block.dataset.classData = JSON.stringify({ title: code, teacher: teacher, room: room, duration: 1, skills: [] });
@@ -2620,7 +2851,8 @@
                     if (draggableElement.parentElement && draggableElement.parentElement.classList.contains('drop-zone')) {
                         // Dragged back from the timetable to the sidebar: restore into whichever zone the person dropped it on
                         const sourceZone = draggableElement.parentElement;
-                        if (returnToUnassigned(draggableElement, zoneId)) {
+                        pushUndoSnapshot();
+                        if (isBlockOrphaned(draggableElement) || returnToUnassigned(draggableElement, zoneId)) {
                             draggableElement.remove();
                             sourceZone.classList.add('empty');
                             sourceZone.innerHTML = emptyCellContent(sourceZone);
@@ -2672,10 +2904,11 @@
                     const draggableElement = document.getElementById(draggableId);
                     
                     if (draggableElement) {
+                        pushUndoSnapshot();
                         const existingClass = zone.querySelector('.class-block');
                         if (existingClass && existingClass !== draggableElement) {
-                            const unassigned = returnToUnassigned(existingClass);
-                            if (!unassigned) {
+                            const bumped = isBlockOrphaned(existingClass) || returnToUnassigned(existingClass);
+                            if (!bumped) {
                                 alert("Conflict! This slot is already taken by a fixed schedule item.");
                                 return; 
                             }
@@ -2917,6 +3150,7 @@
 
         function assignCover(taId, week, day, period) {
             if (currentCoverBlock) {
+                pushUndoSnapshot();
                 const coveringTA = taDatabase.find(t => t.id === taId);
                 const currentTA = taDatabase.find(t => t.id === currentActiveTA);
 
@@ -3026,7 +3260,13 @@
 
         // ---- Data Setup modal: Class Needs table + TA List table ----
 
+        // Snapshot taken the moment the Data Setup modal opens, so "Cancel" can
+        // discard the whole session's edits — needed now that edits sync live to
+        // cards as you type, instead of waiting for "Apply Changes".
+        let dataModalOpenSnapshot = null;
+
         function openDataModal() {
+            dataModalOpenSnapshot = deepCloneState();
             switchDataTab('needs');
             renderClassNeedsTable();
             renderTaListTable();
@@ -3040,6 +3280,21 @@
 
         function closeDataModal() {
             document.getElementById('data-modal').classList.add('hidden');
+        }
+
+        // "Cancel" button — discards every live edit made since the modal opened
+        // (field edits sync immediately now, so this is the only way to back out
+        // of a Data Setup session cleanly). What's discarded can still be brought
+        // back afterwards with Ctrl+Z, same as any other undo-able action.
+        function cancelDataSetup() {
+            if (dataModalOpenSnapshot) {
+                pushUndoSnapshot(); // let Ctrl+Z bring back what we're about to discard, if needed
+                applyLoadedState(dataModalOpenSnapshot);
+                refreshWholeUI();
+                saveStateToStorage();
+            }
+            dataModalOpenSnapshot = null;
+            closeDataModal();
         }
 
         function switchDataTab(tab) {
@@ -3095,6 +3350,11 @@
 
         function updateClassNeedField(idx, field, value) {
             classNeedsData[idx][field] = value;
+            const item = classNeedsData[idx];
+            if (field === 'title' || field === 'teacher' || field === 'room' || field === 'tags') {
+                syncAssignedBlocksForNeed(item.id); // update any already-placed copy in real time
+            }
+            liveRefreshClassNeedsPool(); // update the sidebar pool in real time (if it's what's currently shown)
         }
 
         function addClassNeedRow() {
@@ -3103,7 +3363,15 @@
         }
 
         function removeClassNeedRow(idx) {
+            pushUndoSnapshot();
+            const removed = classNeedsData[idx];
             classNeedsData.splice(idx, 1);
+            if (removed) {
+                // Also clear it off any TA's timetable it was already placed on —
+                // otherwise it'd be stuck there with no way to remove it, since its
+                // source record no longer exists to return it to.
+                removeAssignmentsMatching(cd => cd.needId === removed.id);
+            }
             renderClassNeedsTable();
         }
 
@@ -3156,7 +3424,8 @@
             const skills = parseTags(item.tags);
             card.dataset.classData = JSON.stringify({
                 title: item.title, teacher: item.teacher, room: item.room, duration: 1,
-                skills: skills, day: item.day, period: item.period, week: item.week
+                skills: skills, day: item.day, period: item.period, week: item.week,
+                needId: item.id // lets us detect "already placed on some TA's timetable" later
             });
 
             const titleColorClass = isHigh ? 'text-red-700' : '';
@@ -3197,19 +3466,32 @@
 
         function rebuildUnassignedPool() {
             resetUnassignedZoneLabels();
+            liveRefreshClassNeedsPool();
+        }
+
+        // The actual rebuild, without touching student-selection state — used both
+        // by the full rebuild above (Apply Changes) and by real-time field edits
+        // (where we do NOT want to reset the sidebar out of student mode just
+        // because someone tweaked a Class Needs row in a different tab).
+        function liveRefreshClassNeedsPool() {
+            if (currentStudentId) return; // sidebar is currently showing a student, not the Class Needs pool — nothing to refresh here
 
             const highZone = document.getElementById('unassigned-high');
             const standardZone = document.getElementById('unassigned-standard');
+            if (!highZone || !standardZone) return;
             highZone.innerHTML = '';
             standardZone.innerHTML = '';
 
+            let shownCount = 0;
             classNeedsData.forEach(item => {
+                if (isClassNeedAssigned(item.id)) return; // already placed on some TA's timetable — don't offer it again
                 const card = createUnassignedCardElement(item);
                 (item.priority === 'high' ? highZone : standardZone).appendChild(card);
+                shownCount++;
             });
 
             const footerCount = document.getElementById('unassigned-total-count');
-            if (footerCount) footerCount.innerText = classNeedsData.length;
+            if (footerCount) footerCount.innerText = shownCount;
             reapplyClassFilter();
         }
 
@@ -3256,6 +3538,7 @@
             if (isCloudConfigured()) {
                 await saveStateToCloud();
             }
+            dataModalOpenSnapshot = null; // edits are being kept — nothing to offer "Cancel" back to anymore
             closeDataModal();
         }
 
@@ -3281,6 +3564,13 @@
 
         function updateStudentField(idx, field, value) {
             studentTimetables[idx][field] = value;
+            const student = studentTimetables[idx];
+            if (field === 'name') {
+                syncAssignedBlocksForStudent(student.id); // update any already-placed copy's label in real time
+            }
+            if (currentStudentId === student.id) {
+                loadStudentPeriods(currentStudentId); // sidebar is showing this student right now — refresh it live
+            }
         }
 
         function addStudentRow() {
@@ -3294,7 +3584,15 @@
         }
 
         function removeStudentRow(idx) {
+            pushUndoSnapshot();
+            const removed = studentTimetables[idx];
             studentTimetables.splice(idx, 1);
+            if (removed) {
+                // Also clear this student's periods off any TA's timetable —
+                // otherwise they'd be stuck there with no way to remove them,
+                // since the student record no longer exists to return them to.
+                removeAssignmentsMatching(cd => cd.studentId === removed.id);
+            }
             renderStudentListTable();
         }
 
@@ -3362,6 +3660,11 @@
             if (!student.entries[studentGridWeek][day]) student.entries[studentGridWeek][day] = {};
             if (!student.entries[studentGridWeek][day][period]) student.entries[studentGridWeek][day][period] = { code: '', teacher: '', room: '' };
             student.entries[studentGridWeek][day][period][field] = value;
+
+            syncAssignedBlocksForStudent(student.id); // update any already-placed copy of this period in real time
+            if (currentStudentId === student.id) {
+                loadStudentPeriods(currentStudentId); // sidebar is showing this student right now — refresh it live
+            }
         }
 
         // Keep the left sidebar's student search box in sync with studentTimetables —
@@ -3438,6 +3741,28 @@
             }
         });
 
+        // Ctrl/Cmd+Z to undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y to redo — but never
+        // while focus is inside a text field, so native undo for typing still works
+        // exactly as expected there (this app's undo is for scheduling actions, not
+        // keystrokes).
+        document.addEventListener('keydown', (e) => {
+            const tag = (e.target && e.target.tagName || '').toLowerCase();
+            const isEditableField = tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target && e.target.isContentEditable);
+            if (isEditableField) return;
+
+            const ctrlOrCmd = e.ctrlKey || e.metaKey;
+            if (!ctrlOrCmd) return;
+            const key = e.key.toLowerCase();
+
+            if (key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                performUndo();
+            } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+                e.preventDefault();
+                performRedo();
+            }
+        });
+
         // Turn one period of a student's timetable into a draggable card, same shape
         // as the Class Needs cards so all the existing drag/drop/undo/cover logic
         // (originHtml capture, originZone, etc.) just works for these too.
@@ -3451,7 +3776,8 @@
             card.dataset.originZone = zoneId;
             card.dataset.classData = JSON.stringify({
                 title: cell.code, teacher: cell.teacher, room: cell.room, duration: 1,
-                skills: [], day: day, period: period, week: week, student: student.name
+                skills: [], day: day, period: period, week: week, student: student.name,
+                studentId: student.id // lets us detect "already placed on some TA's timetable" later
             });
 
             card.innerHTML = `
@@ -3509,7 +3835,7 @@
                 DAY_OPTIONS.forEach(day => {
                     PERIOD_OPTIONS.forEach(period => {
                         const cell = student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
-                        if (cell && cell.code) {
+                        if (cell && cell.code && !isStudentPeriodAssigned(student.id, week, day, period)) {
                             zone.appendChild(createStudentPeriodCard(student, week, day, period, cell));
                         }
                     });
