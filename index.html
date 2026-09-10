@@ -401,6 +401,17 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </div>
+
+                <!-- Day filter — only shown once a student is selected. Doesn't touch
+                     the Week A / Week B zone split, just hides/shows cards within each. -->
+                <div id="day-filter-row" class="hidden mt-2 flex flex-wrap gap-1">
+                    <button type="button" class="day-filter-btn bg-blue-600 text-white text-xs px-2 py-1 rounded-md transition-colors" data-day-value="all" onclick="setDayFilter('all')">All</button>
+                    <button type="button" class="day-filter-btn bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-md transition-colors" data-day-value="Mon" onclick="setDayFilter('Mon')">Mon</button>
+                    <button type="button" class="day-filter-btn bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-md transition-colors" data-day-value="Tue" onclick="setDayFilter('Tue')">Tue</button>
+                    <button type="button" class="day-filter-btn bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-md transition-colors" data-day-value="Wed" onclick="setDayFilter('Wed')">Wed</button>
+                    <button type="button" class="day-filter-btn bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-md transition-colors" data-day-value="Thu" onclick="setDayFilter('Thu')">Thu</button>
+                    <button type="button" class="day-filter-btn bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-md transition-colors" data-day-value="Fri" onclick="setDayFilter('Fri')">Fri</button>
+                </div>
             </div>
 
             <!-- List of draggable items -->
@@ -594,7 +605,7 @@
     <div id="cover-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-                <h3 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                <h3 id="cover-modal-title" class="font-bold text-gray-800 text-lg flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
                     </svg>
@@ -2592,13 +2603,20 @@
             return ti === term.length;
         }
 
+        // Which day the "Day" filter row is currently restricting cards to — 'all'
+        // means no restriction. Combined with the text filter below so both apply
+        // together; reset to 'all' whenever a (different) student is selected.
+        let activeDayFilter = 'all';
+
         // Show/hide the cards in both unassigned zones (Class Needs or a selected
-        // student's periods) based on the filter box, matching on the whole card's
-        // text — class code, teacher, room, tags/skills.
+        // student's periods), applying BOTH the text filter box and the day filter
+        // buttons together — a card must pass both to stay visible. Doesn't touch
+        // which zone (Week A / Week B) a card is in, only whether it's shown.
         function filterClassCards(value) {
             document.querySelectorAll('#unassigned-high .draggable-class, #unassigned-standard .draggable-class').forEach(card => {
-                const match = fuzzyMatch(value, card.textContent);
-                card.classList.toggle('hidden', !match);
+                const matchesText = fuzzyMatch(value, card.textContent);
+                const matchesDay = activeDayFilter === 'all' || card.dataset.day === activeDayFilter;
+                card.classList.toggle('hidden', !(matchesText && matchesDay));
             });
         }
 
@@ -2606,9 +2624,22 @@
         // get repopulated (Apply Changes, or picking a different student).
         function reapplyClassFilter() {
             const filterInput = document.getElementById('class-filter-input');
-            if (filterInput && filterInput.value) {
-                filterClassCards(filterInput.value);
-            }
+            filterClassCards(filterInput ? filterInput.value : '');
+        }
+
+        // Day-filter buttons (only shown in student mode) — clicking one narrows
+        // both Week A and Week B zones down to just that day, without disturbing
+        // which zone each card belongs to.
+        function setDayFilter(day) {
+            activeDayFilter = day;
+            document.querySelectorAll('.day-filter-btn').forEach(btn => {
+                const isActive = btn.dataset.dayValue === day;
+                btn.classList.toggle('bg-blue-600', isActive);
+                btn.classList.toggle('text-white', isActive);
+                btn.classList.toggle('bg-gray-100', !isActive);
+                btn.classList.toggle('text-gray-600', !isActive);
+            });
+            reapplyClassFilter();
         }
 
         // ---- Manual entry: click an empty timetable cell, type a class code,
@@ -2934,6 +2965,17 @@
                     const draggableElement = document.getElementById(draggableId);
                     
                     if (draggableElement) {
+                        // Foolproofing: a Week A class can only go in a Week A slot (and
+                        // likewise for Week B) — bounce it back rather than letting it
+                        // land on the wrong week's grid. Manually-entered classes have no
+                        // week of their own, so they're exempt from this check.
+                        let draggedCd = {};
+                        try { draggedCd = JSON.parse(draggableElement.dataset.classData || '{}'); } catch (err) {}
+                        if (draggedCd.week && zone.dataset.week && draggedCd.week !== zone.dataset.week) {
+                            alert('This class is scheduled for Week ' + draggedCd.week + ' — it can\'t be placed in a Week ' + zone.dataset.week + ' slot.');
+                            return;
+                        }
+
                         pushUndoSnapshot();
                         const existingClass = zone.querySelector('.class-block');
                         if (existingClass && existingClass !== draggableElement) {
@@ -3101,8 +3143,21 @@
             return reqs;
         }
 
-        function openCoverModal(className, week, day, period, blockElement) {
+        // mode: 'cover' (existing use — assigning a substitute for an absence) or
+        // 'place' (new — just helps pick which TA to place an unassigned card on;
+        // selecting one jumps to that TA's timetable so the person can drag it in
+        // themselves, nothing gets auto-assigned).
+        let coverModalMode = 'cover';
+
+        function openCoverModal(className, week, day, period, blockElement, mode) {
+            coverModalMode = mode || 'cover';
             currentCoverBlock = blockElement;
+
+            const titleEl = document.getElementById('cover-modal-title');
+            if (titleEl) {
+                titleEl.childNodes[titleEl.childNodes.length - 1].textContent =
+                    coverModalMode === 'place' ? ' Which TA is free?' : ' Find Cover TA';
+            }
 
             // Prefer the class's actual stored tags/skills over guessing from the
             // title text — those are what the person entered in Data Setup.
@@ -3153,7 +3208,12 @@
                 availableTAs.forEach(ta => {
                     let badgeColor = ta._score > 0 ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200';
                     let matchText = ta._score > 0 ? `Matches: ${ta._matchedSkills.join(', ')}` : 'No specific skill match';
-                    
+
+                    const actionLabel = coverModalMode === 'place' ? 'Go to Timetable' : 'Assign Cover';
+                    const actionCall = coverModalMode === 'place'
+                        ? `jumpToTAForPlacement('${ta.id}', '${week}', '${day}', '${period}')`
+                        : `assignCover('${ta.id}', '${week}', '${day}', '${period}')`;
+
                     const row = document.createElement('div');
                     row.className = 'flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow';
                     row.innerHTML = `
@@ -3162,8 +3222,8 @@
                             <div class="text-xs text-gray-500 mt-1">Skills: ${ta.skills.join(', ')}</div>
                             <div class="text-[10px] mt-1.5 border px-2 py-0.5 inline-block rounded ${badgeColor}">${matchText}</div>
                         </div>
-                        <button onclick="assignCover('${ta.id}', '${week}', '${day}', '${period}')" class="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                            Assign Cover
+                        <button onclick="${actionCall}" class="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            ${actionLabel}
                         </button>
                     `;
                     listContainer.appendChild(row);
@@ -3171,6 +3231,37 @@
             }
 
             document.getElementById('cover-modal').classList.remove('hidden');
+        }
+
+        // Clicking an unplaced card (Class Need or student period) — shows which
+        // TAs are free at that exact slot, same list as Find Cover, but picking
+        // one just navigates to that TA's timetable (correct week tab, target
+        // cell briefly highlighted) so the person places it themselves; nothing
+        // is auto-assigned.
+        function openPlacementHelperForCard(card) {
+            let cd = {};
+            try { cd = JSON.parse(card.dataset.classData || '{}'); } catch (e) {}
+            if (!cd.day || !cd.period || !cd.week) return;
+            const titleEl = card.querySelector('.class-title');
+            const title = cd.title || (titleEl ? titleEl.textContent : 'Class');
+            openCoverModal(title, cd.week, cd.day, cd.period, null, 'place');
+        }
+
+        // Selecting a TA from the "place" modal — switch to their timetable, on the
+        // right week tab, and briefly highlight the exact target cell so it's easy
+        // to spot where to drag the card. Nothing gets placed automatically.
+        function jumpToTAForPlacement(taId, week, day, period) {
+            closeCoverModal();
+            switchActiveTA(taId);
+            if (typeof toggleWeek === 'function') toggleWeek(week);
+            setTimeout(() => {
+                const cell = document.querySelector(`.timetable-cell.drop-zone[data-week="${week}"][data-day="${day}"][data-period="${period}"]`);
+                if (cell) {
+                    cell.classList.add('ring-4', 'ring-blue-400', 'ring-offset-1');
+                    if (cell.scrollIntoView) cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => cell.classList.remove('ring-4', 'ring-blue-400', 'ring-offset-1'), 2500);
+                }
+            }, 50);
         }
 
         function closeCoverModal() {
@@ -3450,6 +3541,7 @@
             card.draggable = true;
             card.id = 'req-' + item.id;
             card.dataset.originZone = zoneId;
+            card.dataset.day = item.day; // used by the day-filter buttons
 
             const skills = parseTags(item.tags);
             card.dataset.classData = JSON.stringify({
@@ -3480,6 +3572,7 @@
             card.addEventListener('dragend', () => {
                 card.classList.remove('is-dragging');
             });
+            card.addEventListener('click', () => openPlacementHelperForCard(card));
 
             return card;
         }
@@ -3492,6 +3585,9 @@
             currentStudentId = '';
             const searchInput = document.getElementById('student-search-input');
             if (searchInput) searchInput.value = '';
+            const dayFilterRow = document.getElementById('day-filter-row');
+            if (dayFilterRow) dayFilterRow.classList.add('hidden');
+            setDayFilter('all'); // Class Needs mode doesn't keep a day restriction from a previous student
         }
 
         function rebuildUnassignedPool() {
@@ -3804,6 +3900,7 @@
             card.draggable = true;
             card.id = 'stu-' + student.id + '-' + week + '-' + day + '-' + period;
             card.dataset.originZone = zoneId;
+            card.dataset.day = day; // used by the day-filter buttons
             card.dataset.classData = JSON.stringify({
                 title: cell.code, teacher: cell.teacher, room: cell.room, duration: 1,
                 skills: [], day: day, period: period, week: week, student: student.name,
@@ -3830,6 +3927,7 @@
             card.addEventListener('dragend', () => {
                 card.classList.remove('is-dragging');
             });
+            card.addEventListener('click', () => openPlacementHelperForCard(card));
 
             return card;
         }
@@ -3842,6 +3940,7 @@
             const standardZone = document.getElementById('unassigned-standard');
             const highLabel = document.getElementById('unassigned-high-label');
             const standardLabel = document.getElementById('unassigned-standard-label');
+            const dayFilterRow = document.getElementById('day-filter-row');
 
             if (!studentId) {
                 resetUnassignedZoneLabels();
@@ -3854,11 +3953,14 @@
             const student = studentTimetables.find(s => s.id === studentId);
             if (!student) return;
 
+            const isNewStudent = currentStudentId !== studentId;
             currentStudentId = studentId;
             highLabel.innerText = student.name + ' — Week A';
             standardLabel.innerText = student.name + ' — Week B';
             highZone.innerHTML = '';
             standardZone.innerHTML = '';
+            if (dayFilterRow) dayFilterRow.classList.remove('hidden');
+            if (isNewStudent) setDayFilter('all'); // don't carry a stale day filter over from a previous student
 
             ['A', 'B'].forEach(week => {
                 const zone = week === 'A' ? highZone : standardZone;
