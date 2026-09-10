@@ -605,7 +605,7 @@
     <div id="cover-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-                <h3 id="cover-modal-title" class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                <h3 class="font-bold text-gray-800 text-lg flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
                     </svg>
@@ -3143,21 +3143,8 @@
             return reqs;
         }
 
-        // mode: 'cover' (existing use — assigning a substitute for an absence) or
-        // 'place' (new — just helps pick which TA to place an unassigned card on;
-        // selecting one jumps to that TA's timetable so the person can drag it in
-        // themselves, nothing gets auto-assigned).
-        let coverModalMode = 'cover';
-
-        function openCoverModal(className, week, day, period, blockElement, mode) {
-            coverModalMode = mode || 'cover';
+        function openCoverModal(className, week, day, period, blockElement) {
             currentCoverBlock = blockElement;
-
-            const titleEl = document.getElementById('cover-modal-title');
-            if (titleEl) {
-                titleEl.childNodes[titleEl.childNodes.length - 1].textContent =
-                    coverModalMode === 'place' ? ' Which TA is free?' : ' Find Cover TA';
-            }
 
             // Prefer the class's actual stored tags/skills over guessing from the
             // title text — those are what the person entered in Data Setup.
@@ -3209,11 +3196,6 @@
                     let badgeColor = ta._score > 0 ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200';
                     let matchText = ta._score > 0 ? `Matches: ${ta._matchedSkills.join(', ')}` : 'No specific skill match';
 
-                    const actionLabel = coverModalMode === 'place' ? 'Go to Timetable' : 'Assign Cover';
-                    const actionCall = coverModalMode === 'place'
-                        ? `jumpToTAForPlacement('${ta.id}', '${week}', '${day}', '${period}')`
-                        : `assignCover('${ta.id}', '${week}', '${day}', '${period}')`;
-
                     const row = document.createElement('div');
                     row.className = 'flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow';
                     row.innerHTML = `
@@ -3222,8 +3204,8 @@
                             <div class="text-xs text-gray-500 mt-1">Skills: ${ta.skills.join(', ')}</div>
                             <div class="text-[10px] mt-1.5 border px-2 py-0.5 inline-block rounded ${badgeColor}">${matchText}</div>
                         </div>
-                        <button onclick="${actionCall}" class="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                            ${actionLabel}
+                        <button onclick="assignCover('${ta.id}', '${week}', '${day}', '${period}')" class="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            Assign Cover
                         </button>
                     `;
                     listContainer.appendChild(row);
@@ -3231,37 +3213,6 @@
             }
 
             document.getElementById('cover-modal').classList.remove('hidden');
-        }
-
-        // Clicking an unplaced card (Class Need or student period) — shows which
-        // TAs are free at that exact slot, same list as Find Cover, but picking
-        // one just navigates to that TA's timetable (correct week tab, target
-        // cell briefly highlighted) so the person places it themselves; nothing
-        // is auto-assigned.
-        function openPlacementHelperForCard(card) {
-            let cd = {};
-            try { cd = JSON.parse(card.dataset.classData || '{}'); } catch (e) {}
-            if (!cd.day || !cd.period || !cd.week) return;
-            const titleEl = card.querySelector('.class-title');
-            const title = cd.title || (titleEl ? titleEl.textContent : 'Class');
-            openCoverModal(title, cd.week, cd.day, cd.period, null, 'place');
-        }
-
-        // Selecting a TA from the "place" modal — switch to their timetable, on the
-        // right week tab, and briefly highlight the exact target cell so it's easy
-        // to spot where to drag the card. Nothing gets placed automatically.
-        function jumpToTAForPlacement(taId, week, day, period) {
-            closeCoverModal();
-            switchActiveTA(taId);
-            if (typeof toggleWeek === 'function') toggleWeek(week);
-            setTimeout(() => {
-                const cell = document.querySelector(`.timetable-cell.drop-zone[data-week="${week}"][data-day="${day}"][data-period="${period}"]`);
-                if (cell) {
-                    cell.classList.add('ring-4', 'ring-blue-400', 'ring-offset-1');
-                    if (cell.scrollIntoView) cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    setTimeout(() => cell.classList.remove('ring-4', 'ring-blue-400', 'ring-offset-1'), 2500);
-                }
-            }, 50);
         }
 
         function closeCoverModal() {
@@ -3572,7 +3523,6 @@
             card.addEventListener('dragend', () => {
                 card.classList.remove('is-dragging');
             });
-            card.addEventListener('click', () => openPlacementHelperForCard(card));
 
             return card;
         }
@@ -3927,7 +3877,6 @@
             card.addEventListener('dragend', () => {
                 card.classList.remove('is-dragging');
             });
-            card.addEventListener('click', () => openPlacementHelperForCard(card));
 
             return card;
         }
