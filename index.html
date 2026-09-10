@@ -609,7 +609,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
                     </svg>
-                    Find Cover TA
+                    <span id="cover-modal-title-text">Find Cover TA</span>
                 </h3>
                 <button onclick="closeCoverModal()" class="text-gray-400 hover:text-gray-600">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3143,8 +3143,20 @@
             return reqs;
         }
 
-        function openCoverModal(className, week, day, period, blockElement) {
+        // mode: 'cover' (existing use — finding a substitute for an already-placed,
+        // absent class) or 'place' (right-clicking an unplaced student period card —
+        // just shows who's free at that slot; picking one jumps to that TA's
+        // timetable so the person can drag/type the card in themselves).
+        let coverModalMode = 'cover';
+
+        function openCoverModal(className, week, day, period, blockElement, mode) {
+            coverModalMode = mode || 'cover';
             currentCoverBlock = blockElement;
+
+            const titleTextEl = document.getElementById('cover-modal-title-text');
+            if (titleTextEl) {
+                titleTextEl.textContent = coverModalMode === 'place' ? 'Which TA is free?' : 'Find Cover TA';
+            }
 
             // Prefer the class's actual stored tags/skills over guessing from the
             // title text — those are what the person entered in Data Setup.
@@ -3196,6 +3208,11 @@
                     let badgeColor = ta._score > 0 ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200';
                     let matchText = ta._score > 0 ? `Matches: ${ta._matchedSkills.join(', ')}` : 'No specific skill match';
 
+                    const actionLabel = coverModalMode === 'place' ? 'Go to Timetable' : 'Assign Cover';
+                    const actionCall = coverModalMode === 'place'
+                        ? `jumpToTAForPlacement('${ta.id}', '${week}', '${day}', '${period}')`
+                        : `assignCover('${ta.id}', '${week}', '${day}', '${period}')`;
+
                     const row = document.createElement('div');
                     row.className = 'flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow';
                     row.innerHTML = `
@@ -3204,8 +3221,8 @@
                             <div class="text-xs text-gray-500 mt-1">Skills: ${ta.skills.join(', ')}</div>
                             <div class="text-[10px] mt-1.5 border px-2 py-0.5 inline-block rounded ${badgeColor}">${matchText}</div>
                         </div>
-                        <button onclick="assignCover('${ta.id}', '${week}', '${day}', '${period}')" class="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                            Assign Cover
+                        <button onclick="${actionCall}" class="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            ${actionLabel}
                         </button>
                     `;
                     listContainer.appendChild(row);
@@ -3218,6 +3235,36 @@
         function closeCoverModal() {
             document.getElementById('cover-modal').classList.add('hidden');
             currentCoverBlock = null;
+        }
+
+        // Right-clicking an unplaced student period card — shows which TAs are
+        // free at that exact slot (reuses the Find Cover list), but picking one
+        // just navigates to that TA's timetable rather than assigning anything;
+        // the person places the card there themselves.
+        function openPlacementHelperForCard(card) {
+            let cd = {};
+            try { cd = JSON.parse(card.dataset.classData || '{}'); } catch (e) {}
+            if (!cd.day || !cd.period || !cd.week) return;
+            const titleEl = card.querySelector('.class-title');
+            const title = cd.title || (titleEl ? titleEl.textContent : 'Class');
+            openCoverModal(title, cd.week, cd.day, cd.period, null, 'place');
+        }
+
+        // Selecting a TA from the "place" modal — switch to their timetable, on the
+        // right week tab, and briefly highlight the exact target cell so it's easy
+        // to spot where to drag the card. Nothing gets placed automatically.
+        function jumpToTAForPlacement(taId, week, day, period) {
+            closeCoverModal();
+            switchActiveTA(taId);
+            toggleWeek(week);
+            setTimeout(() => {
+                const cell = document.querySelector(`.timetable-cell.drop-zone[data-week="${week}"][data-day="${day}"][data-period="${period}"]`);
+                if (cell) {
+                    cell.classList.add('ring-4', 'ring-blue-400', 'ring-offset-1');
+                    if (cell.scrollIntoView) cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => cell.classList.remove('ring-4', 'ring-blue-400', 'ring-offset-1'), 2500);
+                }
+            }, 50);
         }
 
         function assignCover(taId, week, day, period) {
@@ -3876,6 +3923,10 @@
             });
             card.addEventListener('dragend', () => {
                 card.classList.remove('is-dragging');
+            });
+            card.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                openPlacementHelperForCard(card);
             });
 
             return card;
