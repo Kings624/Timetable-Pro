@@ -3102,34 +3102,45 @@
             document.querySelectorAll('.class-block').forEach(block => {
                 if (block.closest('#unassigned-list') || (block.textContent || '').includes('Meeting')) return;
 
-                // Right-click a placed class to cancel it and send it back to the unassigned list
-                if (!block.dataset.cancelBound) {
-                    block.dataset.cancelBound = 'true';
+                // Right-click a placed class to cancel it and send it back to the unassigned
+                // list. Tracked with a JS property, not a dataset attribute — a dataset flag
+                // gets serialized into the saved timetable HTML (saveCurrentTimetableState
+                // stores block.outerHTML), so after any save/reload cycle (switching TA,
+                // Apply Changes, undo/redo, page load) the *new* DOM node would already carry
+                // the flag from that markup and this would wrongly skip re-attaching the
+                // listener to it, leaving right-click dead.
+                if (!block._cancelBound) {
+                    block._cancelBound = true;
                     block.addEventListener('contextmenu', (e) => {
                         e.preventDefault();
                         cancelPlacement(block);
                     });
                 }
 
-                if (!block.querySelector('.cover-btn')) {
-                    const btn = document.createElement('button');
-                    btn.className = 'cover-btn';
-                    btn.innerHTML = '🔍 Find Cover';
-                    btn.onclick = (e) => {
-                        e.stopPropagation();
-                        const zone = block.closest('.drop-zone');
-                        if (!zone) return;
-                        
-                        const week = zone.dataset.week;
-                        const day = zone.dataset.day;
-                        const period = zone.dataset.period;
-                        const titleEl = block.querySelector('.class-title');
-                        const title = titleEl ? (titleEl.textContent || 'Unknown Class') : 'Unknown Class';
-                        
-                        openCoverModal(title, week, day, period, block);
-                    };
-                    block.appendChild(btn);
-                }
+                // Always replace the Find Cover button rather than reusing one found in the
+                // markup — the button element itself survives a save/reload cycle (it's
+                // plain HTML), but a handler assigned via `.onclick` does not, so a "stale"
+                // button with no working handler would otherwise be left in place forever.
+                const existingBtn = block.querySelector('.cover-btn');
+                if (existingBtn) existingBtn.remove();
+
+                const btn = document.createElement('button');
+                btn.className = 'cover-btn';
+                btn.innerHTML = '🔍 Find Cover';
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const zone = block.closest('.drop-zone');
+                    if (!zone) return;
+
+                    const week = zone.dataset.week;
+                    const day = zone.dataset.day;
+                    const period = zone.dataset.period;
+                    const titleEl = block.querySelector('.class-title');
+                    const title = titleEl ? (titleEl.textContent || 'Unknown Class') : 'Unknown Class';
+
+                    openCoverModal(title, week, day, period, block);
+                };
+                block.appendChild(btn);
             });
         }
 
