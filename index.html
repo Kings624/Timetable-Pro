@@ -2578,11 +2578,43 @@
             if (!confirmed) return;
 
             pushUndoSnapshot();
+
+            // A cover assignment links two blocks on two different TAs' timetables —
+            // cancelling either one (the absent TA's now-covered original, or the
+            // cover entry itself) needs to also clear the other, or it's left behind
+            // permanently pointing at a cover relationship that no longer exists.
+            if (block.dataset.coverRef) {
+                try { clearLinkedCoverBlock(JSON.parse(block.dataset.coverRef)); } catch (e) {}
+            }
+            if (block.dataset.coverOrigin) {
+                try { clearLinkedCoverBlock(JSON.parse(decodeURIComponent(block.dataset.coverOrigin))); } catch (e) {}
+            }
+
             if (isBlockOrphaned(block) || returnToUnassigned(block)) {
                 block.remove();
                 cell.classList.add('empty');
                 cell.innerHTML = emptyCellContent(cell);
                 saveCurrentTimetableState();
+            }
+        }
+
+        // Removes the other half of a cover pair — identified by {taId, week, day,
+        // period} — from that TA's timetable data, and clears it from the live grid
+        // too if that TA happens to be the one currently on screen.
+        function clearLinkedCoverBlock(ref) {
+            if (!ref || !ref.taId) return;
+            const ta = taDatabase.find(t => t.id === ref.taId);
+            if (ta && ta.timetables[ref.week] && ta.timetables[ref.week][ref.day]) {
+                delete ta.timetables[ref.week][ref.day][ref.period];
+            }
+            if (ref.taId === currentActiveTA) {
+                const linkedCell = document.querySelector(
+                    `.timetable-cell.drop-zone[data-week="${ref.week}"][data-day="${ref.day}"][data-period="${ref.period}"]`
+                );
+                if (linkedCell) {
+                    linkedCell.innerHTML = emptyCellContent(linkedCell);
+                    linkedCell.classList.add('empty');
+                }
             }
         }
 
@@ -3302,10 +3334,19 @@
                 }
                 const absentName = currentTA ? currentTA.name : currentActiveTA;
 
+                // A cover entry lives on a *different* TA's timetable from the absent
+                // class it covers for. Each side carries a data-* marker pointing at the
+                // other (week/day/period is the same slot on both, only the TA differs)
+                // so cancelling either one can clean up the other — otherwise cancelling
+                // one side leaves the other orphaned on some TA's timetable forever,
+                // referring to a cover relationship that no longer exists.
                 if (coveringTA) {
                     if (!coveringTA.timetables[week][day]) coveringTA.timetables[week][day] = {};
+                    const coverOriginRef = encodeURIComponent(JSON.stringify({
+                        taId: currentActiveTA, week, day, period
+                    }));
                     coveringTA.timetables[week][day][period] = {
-                        html: `<div class="class-block bg-green-50 border border-green-200 border-l-green-500 w-full h-full">
+                        html: `<div class="class-block bg-green-50 border border-green-200 border-l-green-500 w-full h-full" data-cover-origin="${coverOriginRef}" data-class-data="${escapeHtml(rawClassData)}">
                             <div class="flex justify-between items-start">
                                 <span class="class-title text-green-800">${classTitle}</span>
                                 <span class="text-[10px] bg-green-100 text-green-800 px-1 py-0.5 rounded shrink-0">Cover</span>
@@ -3319,6 +3360,7 @@
                         classData: rawClassData
                     };
                     coveringTA.stats.coversProvided += 1;
+                    currentCoverBlock.dataset.coverRef = JSON.stringify({ taId: taId, week, day, period });
                 }
 
                 if (currentTA) {
