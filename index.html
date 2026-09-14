@@ -278,6 +278,17 @@
             overflow-y: auto;
         }
 
+        /* Main timetable panel — same explicit-height approach as .tools-sidebar
+           above (4rem = the navbar's h-16), rather than relying on flex-grow
+           stretch alone: with a sticky-positioned header and a CSS-grid body
+           inside, the plain flex-1/min-h-0 combination isn't always enough on
+           its own to keep this panel from growing past the viewport, which
+           left the last period(s) clipped with no way to scroll to them. */
+        .main-panel {
+            height: calc(100vh - 4rem);
+            overflow-y: auto;
+        }
+
         /* Hide scrollbar for a cleaner look */
         .tools-sidebar::-webkit-scrollbar {
             width: 6px;
@@ -516,7 +527,7 @@
         </aside>
 
         <!-- Right Area: Timetable -->
-        <main class="flex-1 min-h-0 overflow-y-auto bg-gray-100 p-6 flex flex-col items-center">
+        <main class="flex-1 min-h-0 overflow-y-auto main-panel bg-gray-100 p-6 flex flex-col items-center">
             
             <!-- Week Toggle -->
             <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg mb-6 self-center">
