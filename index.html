@@ -702,7 +702,7 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <div class="w-3 h-3 bg-purple-500 rounded-sm"></div>
-                    <span>Meeting/Admin (Fixed)</span>
+                    <span>Duty (e.g. Homework Club — no room needed)</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <div class="w-3 h-3 bg-orange-500 rounded-sm"></div>
@@ -2845,16 +2845,26 @@
                 // Fallback for cards with no captured original markup
                 const classData = JSON.parse(classBlock.dataset.classData);
                 newItem = document.createElement('div');
-                newItem.className = 'draggable-class class-block bg-white border-gray-200 border-l-blue-500 hover:shadow-md mb-3';
-                newItem.id = 'req-ret-' + Date.now();
-                newItem.dataset.classData = classBlock.dataset.classData;
-                newItem.innerHTML = `
-                    <span class="class-title">${classData.title}</span>
-                    <div class="class-detail mt-1 flex justify-between">
-                        <span>Teacher: ${classData.teacher}</span>
-                        <span>Room: ${classData.room}</span>
-                    </div>
-                `;
+                if (classData.isDuty) {
+                    // Same quiet, room-free styling as the placed duty block itself —
+                    // showing "Teacher: / Room:" with nothing after them would read
+                    // as missing data rather than "this duty doesn't need either".
+                    newItem.className = 'draggable-class class-block bg-purple-50 border-purple-200 border-l-purple-500 hover:shadow-md mb-3 flex items-center justify-center text-center';
+                    newItem.id = 'req-ret-' + Date.now();
+                    newItem.dataset.classData = classBlock.dataset.classData;
+                    newItem.innerHTML = `<span class="class-title text-purple-800">${escapeHtml(classData.title)}</span>`;
+                } else {
+                    newItem.className = 'draggable-class class-block bg-white border-gray-200 border-l-blue-500 hover:shadow-md mb-3';
+                    newItem.id = 'req-ret-' + Date.now();
+                    newItem.dataset.classData = classBlock.dataset.classData;
+                    newItem.innerHTML = `
+                        <span class="class-title">${escapeHtml(classData.title)}</span>
+                        <div class="class-detail mt-1 flex justify-between">
+                            <span>Teacher: ${escapeHtml(classData.teacher)}</span>
+                            <span>Room: ${escapeHtml(classData.room)}</span>
+                        </div>
+                    `;
+                }
             }
 
             newItem.draggable = true;
@@ -3211,6 +3221,10 @@
             if (!cell || cell.querySelector('.class-block')) return;
             cell.innerHTML = `
                 <div class="manual-entry-form p-1">
+                    <div class="manual-mode-toggle flex gap-1 mb-1">
+                        <button type="button" class="manual-mode-btn text-[10px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-medium" data-mode="class">Class</button>
+                        <button type="button" class="manual-mode-btn text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium" data-mode="duty" title="A duty like Homework Club cover — just a label, no room needed">Duty</button>
+                    </div>
                     <input type="text" placeholder="Class code + Enter" class="manual-code-input w-full border border-blue-300 rounded px-1 py-0.5 text-xs mb-1">
                     <div class="manual-multi-match hidden flex-col gap-1 mb-1"></div>
                     <div class="manual-extra-fields hidden gap-1 mb-1">
@@ -3223,17 +3237,68 @@
                     </div>
                 </div>
             `;
+            cell.dataset.manualMode = 'class';
+
             const codeInput = cell.querySelector('.manual-code-input');
             codeInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    handleManualCodeEntered(cell);
+                    if (cell.dataset.manualMode === 'duty') {
+                        handleManualDutyEntered(cell);
+                    } else {
+                        handleManualCodeEntered(cell);
+                    }
                 }
+            });
+            cell.querySelectorAll('.manual-mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => setManualEntryMode(cell, btn.dataset.mode));
             });
             cell.querySelector('.manual-cancel-btn').addEventListener('click', () => {
                 cell.innerHTML = emptyCellContent(cell);
             });
             codeInput.focus();
+        }
+
+        // Switches the manual-entry mini-form between "Class" (code, with the
+        // usual teacher/room lookup) and "Duty" (just a label — for a whole-
+        // period responsibility like Homework Club cover that isn't tied to any
+        // room). Resets whatever the Class flow may have already revealed, so
+        // switching modes mid-entry never leaves stale fields showing.
+        function setManualEntryMode(cell, mode) {
+            cell.dataset.manualMode = mode;
+            cell.querySelectorAll('.manual-mode-btn').forEach(btn => {
+                const active = btn.dataset.mode === mode;
+                btn.classList.toggle('bg-blue-600', active && mode === 'class');
+                btn.classList.toggle('bg-purple-600', active && mode === 'duty');
+                btn.classList.toggle('text-white', active);
+                btn.classList.toggle('bg-gray-100', !active);
+                btn.classList.toggle('text-gray-600', !active);
+            });
+
+            const codeInput = cell.querySelector('.manual-code-input');
+            codeInput.placeholder = mode === 'duty' ? 'Duty name + Enter (e.g. Homework Club)' : 'Class code + Enter';
+            codeInput.value = '';
+            codeInput.readOnly = false;
+            codeInput.classList.remove('bg-gray-100');
+
+            const multiMatch = cell.querySelector('.manual-multi-match');
+            multiMatch.classList.add('hidden');
+            multiMatch.classList.remove('flex');
+            multiMatch.innerHTML = '';
+
+            const extra = cell.querySelector('.manual-extra-fields');
+            extra.classList.add('hidden');
+            extra.classList.remove('flex');
+
+            cell.querySelector('.manual-confirm-btn').classList.add('hidden');
+            codeInput.focus();
+        }
+
+        function handleManualDutyEntered(cell) {
+            const codeInput = cell.querySelector('.manual-code-input');
+            const title = codeInput.value.trim();
+            if (!title) return;
+            createManualClassBlock(cell, title, '', '', true);
         }
 
         // Reveal the plain teacher/room input fields for the person to fill in by
@@ -3309,15 +3374,23 @@
             }
         }
 
-        function createManualClassBlock(cell, code, teacher, room) {
+        function createManualClassBlock(cell, code, teacher, room, isDuty) {
             pushUndoSnapshot();
             const block = document.createElement('div');
-            block.className = 'class-block w-full h-full';
-            block.dataset.classData = JSON.stringify({ title: code, teacher: teacher, room: room, duration: 1, skills: [] });
-            block.innerHTML = `
-                <span class="class-title">${code}</span>
-                <div class="class-detail mt-auto flex justify-between"><span>${teacher || 'TBD'}</span><span>${room || 'TBD'}</span></div>
-            `;
+            block.dataset.classData = JSON.stringify({ title: code, teacher: teacher, room: room, duration: 1, skills: [], isDuty: !!isDuty });
+            if (isDuty) {
+                // A duty (e.g. Homework Club cover) has no room/teacher to show, so
+                // it gets its own quieter style — centered label only — rather than
+                // an empty detail row of "TBD   TBD" that reads like missing data.
+                block.className = 'class-block w-full h-full bg-purple-50 border-purple-200 border-l-purple-500 flex items-center justify-center text-center';
+                block.innerHTML = `<span class="class-title text-purple-800">${escapeHtml(code)}</span>`;
+            } else {
+                block.className = 'class-block w-full h-full';
+                block.innerHTML = `
+                    <span class="class-title">${escapeHtml(code)}</span>
+                    <div class="class-detail mt-auto flex justify-between"><span>${escapeHtml(teacher || 'TBD')}</span><span>${escapeHtml(room || 'TBD')}</span></div>
+                `;
+            }
             block.draggable = true;
             block.id = 'manual-' + Date.now();
             block.addEventListener('dragstart', (ev) => {
