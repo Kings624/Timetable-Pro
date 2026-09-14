@@ -100,19 +100,34 @@
             border-right: 1px solid #e5e7eb;
         }
 
-        /* Compare View: compact, read-only mini-grids shown several at a time
-           side by side (see #compare-modal / renderCompareColumnHtml). */
+        /* Compare View: draggable-to-reorder cards, each a compact mini-grid,
+           shown several at a time side by side (see #compare-modal /
+           renderCompareColumnHtml) — a digital stand-in for spreading paper
+           timetables across a desk. */
         .compare-column {
-            width: 210px;
+            width: 220px;
+            background-color: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+            padding: 0.625rem;
+            transition: box-shadow 0.15s, opacity 0.15s;
+        }
+        .compare-column.is-dragging {
+            opacity: 0.4;
         }
         .compare-column-title {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
             font-weight: 700;
             font-size: 0.8rem;
             color: #1f2937;
             margin-bottom: 0.375rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            cursor: grab;
+        }
+        .compare-column-title:active {
+            cursor: grabbing;
         }
         .compare-table {
             border-collapse: collapse;
@@ -142,6 +157,13 @@
             vertical-align: top;
             min-height: 34px;
             word-break: break-word;
+        }
+        .compare-cell-clickable {
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+        .compare-cell-clickable:hover {
+            background-color: #eff6ff;
         }
 
         /* Drag and Drop specific styles */
@@ -4430,22 +4452,37 @@
             const { studentId, week, day, period } = assignTaContext;
             moveStudentPeriodToTA(studentId, week, day, period, newTaId);
             closeAssignTaModal();
-            renderStudentModalGrid(); // reflect the change in the still-open Student Timetable modal
+            // Reflect the change in whichever view(s) launched this — the Student
+            // Timetable modal and/or Compare View can each be the one open.
+            if (!document.getElementById('student-timetable-modal').classList.contains('hidden')) {
+                renderStudentModalGrid();
+            }
+            if (!document.getElementById('compare-modal').classList.contains('hidden')) {
+                renderCompareGrid();
+            }
         }
 
         // ---- Compare View: several timetables (TAs and/or the currently
-        // selected student) rendered read-only, side by side, so they can be
-        // cross-checked visually the way spreading paper printouts across a
-        // desk would, instead of flipping between single views one at a time. ----
+        // selected student) rendered as draggable-to-reorder cards, side by
+        // side, so they can be cross-checked visually the way spreading paper
+        // printouts across a desk would. Cards showing a student's periods (or
+        // a TA's period that came from a student's periods) can be clicked to
+        // assign/reassign the TA right there — the same Assign TA modal the
+        // Student Timetable view uses — so a conflict spotted here ("this TA's
+        // already got something at Period 3") can be resolved without leaving
+        // this screen. ----
 
-        let compareSelection = new Set();
+        // Ordered (not a Set) so drag-reordering the cards means something —
+        // display order follows this array, not insertion order.
+        let compareOrder = [];
         let compareWeek = 'A';
+        let compareDragKey = null; // key of the card currently being dragged, if any
 
         function openCompareModal() {
-            if (compareSelection.size === 0) {
+            if (compareOrder.length === 0) {
                 // Sensible default so the view isn't empty the first time it opens.
-                if (currentActiveTA) compareSelection.add('ta:' + currentActiveTA);
-                if (currentStudentId) compareSelection.add('student:' + currentStudentId);
+                if (currentActiveTA) compareOrder.push('ta:' + currentActiveTA);
+                if (currentStudentId) compareOrder.push('student:' + currentStudentId);
             }
             renderComparePicker();
             renderCompareGrid();
@@ -4471,7 +4508,8 @@
         }
 
         function toggleCompareSelection(key) {
-            if (compareSelection.has(key)) compareSelection.delete(key); else compareSelection.add(key);
+            const idx = compareOrder.indexOf(key);
+            if (idx === -1) compareOrder.push(key); else compareOrder.splice(idx, 1);
             renderComparePicker();
             renderCompareGrid();
         }
@@ -4480,7 +4518,7 @@
             const list = document.getElementById('compare-picker-list');
             let html = taDatabase.map(ta => {
                 const key = 'ta:' + ta.id;
-                const active = compareSelection.has(key);
+                const active = compareOrder.includes(key);
                 return `<button type="button" onclick="toggleCompareSelection('${key}')" class="text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${escapeHtml(ta.name)}</button>`;
             }).join('');
 
@@ -4488,53 +4526,74 @@
                 const student = studentTimetables.find(s => s.id === currentStudentId);
                 if (student) {
                     const key = 'student:' + student.id;
-                    const active = compareSelection.has(key);
+                    const active = compareOrder.includes(key);
                     html += `<button type="button" onclick="toggleCompareSelection('${key}')" class="text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-700 border-purple-300 hover:bg-purple-50'}">🎓 ${escapeHtml(student.name)}</button>`;
                 }
             }
             list.innerHTML = html;
         }
 
+        // Cell content plus an optional click target: `assign` names a student
+        // period ({studentId, week, day, period}) to open the Assign TA modal
+        // for — set whenever the period showing in this cell is traceable back
+        // to a specific student, whichever card (the student's own, or a TA's)
+        // it's rendered on, so reassigning is always one click away.
+        function compareCellContent(kind, id, week, day, period) {
+            if (kind === 'ta') {
+                const ta = taDatabase.find(t => t.id === id);
+                const entry = ta && ta.timetables[week] && ta.timetables[week][day] && ta.timetables[week][day][period];
+                if (!entry) return { html: '', assign: null };
+                let cd = {};
+                try { cd = JSON.parse(entry.classData || '{}'); } catch (e) {}
+                const assign = cd.studentId ? { studentId: cd.studentId, week: cd.week || week, day: cd.day || day, period: cd.period || period } : null;
+                return { html: cd.title ? escapeHtml(cd.title) : '', assign };
+            }
+            const student = studentTimetables.find(s => s.id === id);
+            const cell = student && student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
+            if (!cell || !cell.code) return { html: '', assign: null };
+            const taMatch = findTaForStudentPeriod(id, week, day, period);
+            const taLabel = taMatch
+                ? `<div class="text-indigo-600 mt-0.5">👤${escapeHtml(taMatch.ta.name)}</div>`
+                : `<div class="text-red-400 mt-0.5">unassigned</div>`;
+            return { html: `${escapeHtml(cell.code)}${taLabel}`, assign: { studentId: id, week, day, period } };
+        }
+
         function renderCompareColumnHtml(kind, id, week) {
-            let title, cellFn;
+            let title;
             if (kind === 'ta') {
                 const ta = taDatabase.find(t => t.id === id);
                 if (!ta) return '';
                 title = ta.name;
-                cellFn = (day, period) => {
-                    const entry = ta.timetables[week] && ta.timetables[week][day] && ta.timetables[week][day][period];
-                    if (!entry) return '';
-                    let cd = {};
-                    try { cd = JSON.parse(entry.classData || '{}'); } catch (e) {}
-                    return cd.title ? escapeHtml(cd.title) : '';
-                };
             } else {
                 const student = studentTimetables.find(s => s.id === id);
                 if (!student) return '';
                 title = '🎓 ' + student.name;
-                cellFn = (day, period) => {
-                    const cell = student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
-                    if (!cell || !cell.code) return '';
-                    const taMatch = findTaForStudentPeriod(id, week, day, period);
-                    const taLabel = taMatch
-                        ? `<div class="text-indigo-600 mt-0.5">👤${escapeHtml(taMatch.ta.name)}</div>`
-                        : `<div class="text-red-400 mt-0.5">unassigned</div>`;
-                    return `${escapeHtml(cell.code)}${taLabel}`;
-                };
             }
 
             let rows = '';
             PERIOD_OPTIONS.forEach(period => {
                 rows += `<tr><td class="compare-time-label">P${escapeHtml(period)}</td>`;
                 DAY_OPTIONS.forEach(day => {
-                    rows += `<td class="compare-cell">${cellFn(day, period)}</td>`;
+                    const { html, assign } = compareCellContent(kind, id, week, day, period);
+                    const clickAttr = assign
+                        ? ` onclick="openAssignTaForStudentPeriod('${assign.studentId}','${assign.week}','${assign.day}','${assign.period}')" title="Click to assign / change TA"`
+                        : '';
+                    rows += `<td class="compare-cell${assign ? ' compare-cell-clickable' : ''}"${clickAttr}>${html}</td>`;
                 });
                 rows += `</tr>`;
             });
 
+            const key = kind + ':' + id;
             return `
-                <div class="compare-column shrink-0">
-                    <div class="compare-column-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+                <div class="compare-column shrink-0" data-compare-key="${escapeHtml(key)}"
+                     ondragover="compareDragOver(event)" ondrop="compareDrop(event, '${key}')">
+                    <div class="compare-column-title" draggable="true"
+                         ondragstart="compareDragStart(event, '${key}')" ondragend="compareDragEnd(event)">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
+                        </svg>
+                        <span class="truncate" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+                    </div>
                     <table class="compare-table">
                         <thead><tr><th></th>${DAY_OPTIONS.map(d => `<th>${d}</th>`).join('')}</tr></thead>
                         <tbody>${rows}</tbody>
@@ -4545,18 +4604,44 @@
 
         function renderCompareGrid() {
             const wrapper = document.getElementById('compare-grid-wrapper');
-            if (compareSelection.size === 0) {
+            if (compareOrder.length === 0) {
                 wrapper.innerHTML = '<div class="text-sm text-gray-400 italic p-6">Pick at least one TA or student above to compare.</div>';
                 return;
             }
-            let html = '';
-            compareSelection.forEach(key => {
+            wrapper.innerHTML = compareOrder.map(key => {
                 const sep = key.indexOf(':');
-                const kind = key.slice(0, sep);
-                const id = key.slice(sep + 1);
-                html += renderCompareColumnHtml(kind, id, compareWeek);
-            });
-            wrapper.innerHTML = html;
+                return renderCompareColumnHtml(key.slice(0, sep), key.slice(sep + 1), compareWeek);
+            }).join('');
+        }
+
+        // Drag-to-reorder the compare cards, like rearranging paper printouts —
+        // purely a display-order change (compareOrder), no data is touched.
+        function compareDragStart(e, key) {
+            compareDragKey = key;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', key);
+            const card = e.currentTarget.closest('.compare-column');
+            if (card) card.classList.add('is-dragging');
+        }
+        function compareDragOver(e) {
+            if (!compareDragKey) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+        function compareDrop(e, targetKey) {
+            e.preventDefault();
+            if (!compareDragKey || compareDragKey === targetKey) return;
+            const fromIdx = compareOrder.indexOf(compareDragKey);
+            const toIdx = compareOrder.indexOf(targetKey);
+            if (fromIdx === -1 || toIdx === -1) return;
+            compareOrder.splice(fromIdx, 1);
+            // Re-find the target's index after removal, then drop the card just after it.
+            compareOrder.splice(compareOrder.indexOf(targetKey) + 1, 0, compareDragKey);
+            renderCompareGrid();
+        }
+        function compareDragEnd(e) {
+            compareDragKey = null;
+            document.querySelectorAll('.compare-column.is-dragging').forEach(el => el.classList.remove('is-dragging'));
         }
     </script>
 </body>
