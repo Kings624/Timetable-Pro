@@ -425,21 +425,21 @@
             <div class="flex items-center gap-1.5">
                 <span class="text-sm font-medium text-gray-600 hidden md:inline">TA:</span>
                 <select id="ta-selector" onchange="switchActiveTA(this.value)" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 font-semibold">
-                    <option value="andrew" selected>Andrew</option>
-                    <option value="anisa">Anisa</option>
-                    <option value="antonia">Antonia</option>
-                    <option value="bilkis">Bilkis</option>
-                    <option value="chantal">Chantal</option>
-                    <option value="esme">Esme</option>
-                    <option value="hamza">Hamza</option>
-                    <option value="janice">Janice</option>
-                    <option value="lidia">Lidia</option>
-                    <option value="maria">Maria</option>
-                    <option value="muslima">Muslima</option>
-                    <option value="nadia">Nadia</option>
-                    <option value="shahanaz">Shahanaz</option>
-                    <option value="sharena">Sharena</option>
                     <option value="umaira">Umaira</option>
+                    <option value="sharena">Sharena</option>
+                    <option value="shahanaz">Shahanaz</option>
+                    <option value="nadia">Nadia</option>
+                    <option value="muslima">Muslima</option>
+                    <option value="maria">Maria</option>
+                    <option value="lidia">Lidia</option>
+                    <option value="janice">Janice</option>
+                    <option value="hamza">Hamza</option>
+                    <option value="esme">Esme</option>
+                    <option value="chantal">Chantal</option>
+                    <option value="bilkis">Bilkis</option>
+                    <option value="antonia">Antonia</option>
+                    <option value="anisa">Anisa</option>
+                    <option value="andrew" selected>Andrew</option>
                 </select>
             </div>
 
@@ -1368,7 +1368,12 @@
         function refreshTaSelectorOptions() {
             const selector = document.getElementById('ta-selector');
             if (!selector) return;
-            selector.innerHTML = taDatabase.map(ta => `<option value="${escapeHtml(ta.id)}">${escapeHtml(ta.name)}</option>`).join('');
+            // Descending by name (Z→A) — matches the order the options are hand-
+            // written in above, so a rebuild here (after undo/redo, loading saved
+            // data, or Data Setup changes) doesn't silently revert to whatever
+            // order taDatabase itself happens to be in.
+            const sorted = [...taDatabase].sort((a, b) => b.name.localeCompare(a.name));
+            selector.innerHTML = sorted.map(ta => `<option value="${escapeHtml(ta.id)}">${escapeHtml(ta.name)}</option>`).join('');
             if (taDatabase.find(ta => ta.id === currentActiveTA)) {
                 selector.value = currentActiveTA;
             } else if (taDatabase.length) {
@@ -2625,10 +2630,14 @@
             return !!findAssignedEntry(cd => cd.needId === needId);
         }
 
+        // True once this student's period is covered by a TA — either directly
+        // (their own entry) or because another student's identical class (same
+        // code+room+slot) already has one; see findTaForStudentPeriod. Keeps a
+        // sibling's card out of the unassigned pool once the room is covered,
+        // rather than showing it as still needing its own separate assignment.
         function isStudentPeriodAssigned(studentId, week, day, period) {
             if (!studentId) return false;
-            return !!findAssignedEntry(cd =>
-                cd.studentId === studentId && cd.week === week && cd.day === day && cd.period === period);
+            return !!findTaForStudentPeriod(studentId, week, day, period);
         }
 
         // Sweep every TA's saved timetable and clear out any entry whose classData
@@ -2664,19 +2673,34 @@
         // student's side instead of hunting for the right TA to drag it onto. ----
 
         // Returns { ta, covering } for whichever TA currently has this student's
-        // period on their timetable, or null if nobody does. A covered period
-        // legitimately shows up on TWO TAs at once — the absent TA's now-covered
-        // original, and the covering TA's added entry, since the cover entry
-        // copies the original's classData — `covering: true` marks the one
-        // actually with the student right now.
+        // period on their timetable, or null if nobody does. Matches either by
+        // the classData's own recorded studentId (the student whose card the
+        // entry was actually created from) OR by identical class — same code,
+        // same room, same Week/Day/Period — so every OTHER student physically
+        // in that same room automatically shows the same TA too, without a
+        // separate stored entry for each of them (a TA's timetable can only
+        // hold one entry per slot, so writing one per student would just
+        // overwrite the previous one — this is why they share a single entry
+        // instead). A covered period legitimately shows up on TWO TAs at
+        // once — the absent TA's now-covered original, and the covering TA's
+        // added entry, since the cover entry copies the original's classData —
+        // `covering: true` marks the one actually with the student right now.
         function findTaForStudentPeriod(studentId, week, day, period) {
+            const student = studentTimetables.find(s => s.id === studentId);
+            const ownCell = student && student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
+            const ownCode = ownCell && ownCell.code ? ownCell.code.trim().toLowerCase() : '';
+            const ownRoom = ownCell && ownCell.room ? ownCell.room.trim().toLowerCase() : '';
+
             let fallback = null;
             for (const ta of taDatabase) {
                 const entry = ta.timetables[week] && ta.timetables[week][day] && ta.timetables[week][day][period];
                 if (!entry || !entry.classData) continue;
                 let cd;
                 try { cd = JSON.parse(entry.classData); } catch (e) { continue; }
-                if (cd.studentId !== studentId) continue;
+                const matchesById = cd.studentId === studentId;
+                const matchesByClass = ownRoom && cd.title && (cd.title || '').trim().toLowerCase() === ownCode
+                    && (cd.room || '').trim().toLowerCase() === ownRoom;
+                if (!matchesById && !matchesByClass) continue;
                 const covering = !!(entry.html && entry.html.includes('data-cover-origin'));
                 if (covering) return { ta, covering: true };
                 if (!fallback) fallback = { ta, covering: false };
@@ -2734,19 +2758,18 @@
             }
         }
 
-        // Moves one period of a student's schedule onto a specific TA's timetable
-        // (or clears it entirely if newTaId is falsy) — the engine behind the
-        // Student Timetable modal's Assign/Change TA action. Removes it from
-        // wherever it currently sits first (cleaning up any linked cover entry),
-        // then places a fresh copy exactly as dragging the sidebar card there
-        // would, so Find Cover, right-click cancel, and Undo all keep working on
-        // it afterwards.
-        function moveStudentPeriodToTA(studentId, week, day, period, newTaId) {
+        // Low-level placement: clears wherever this student period currently sits
+        // (if anywhere, cleaning up any linked cover entry first) and places it
+        // fresh on newTaId (or just clears it if newTaId is falsy). No undo
+        // snapshot, no sidebar refresh — that's the caller's job. Note this only
+        // ever clears/writes the ONE entry belonging to this exact student —
+        // every other student in an identical class (same code/room/slot) is
+        // covered by the SAME entry via findTaForStudentPeriod's matching, not a
+        // separate write, since a TA's timetable can only hold one entry per slot.
+        function placeSingleStudentPeriod(studentId, week, day, period, newTaId) {
             const student = studentTimetables.find(s => s.id === studentId);
             const cell = student && student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
             if (!cell || !cell.code) return;
-
-            pushUndoSnapshot();
 
             const current = findTaForStudentPeriod(studentId, week, day, period);
             if (current) clearTaSlot(current.ta, week, day, period);
@@ -2776,6 +2799,73 @@
                     }
                 }
             }
+        }
+
+        // Every OTHER student whose own schedule has an identical class (same
+        // code, same room, same Week/Day/Period) to the given student's period —
+        // in reality, the same TA in the same room covers every one of them at
+        // once, not just whichever one student's card happened to get placed.
+        // Requires a room on both sides, same as the hover roster (a Duty has
+        // nothing to match against).
+        function findIdenticalClassSiblings(originStudentId, code, room, week, day, period) {
+            if (!code || !room) return [];
+            const target = code.trim().toLowerCase();
+            const targetRoom = room.trim().toLowerCase();
+            return studentTimetables.filter(s => {
+                if (s.id === originStudentId) return false;
+                const cell = s.entries[week] && s.entries[week][day] && s.entries[week][day][period];
+                return cell && cell.code && cell.code.trim().toLowerCase() === target
+                    && (cell.room || '').trim().toLowerCase() === targetRoom;
+            });
+        }
+
+        // Check-only pass, run BEFORE pushUndoSnapshot: warns (via confirm) about
+        // any sibling already covered by a DIFFERENT TA — one room only needs one
+        // TA, so this is a real double-booking, not something to resolve
+        // silently. Returns false the moment the user backs out of one.
+        function checkIdenticalClassConflicts(originStudentId, code, room, week, day, period, taId) {
+            for (const sib of findIdenticalClassSiblings(originStudentId, code, room, week, day, period)) {
+                const current = findTaForStudentPeriod(sib.id, week, day, period);
+                if (current && current.ta.id !== taId) {
+                    const proceed = confirm(
+                        `${sib.name} is in this exact class (same room, same time) and already has ${current.ta.name} assigned there.\n\n` +
+                        `A room only needs one TA — continuing will replace ${current.ta.name} with this TA for everyone in this class, not add a second one. Continue anyway?`
+                    );
+                    if (!proceed) return false;
+                }
+            }
+            return true;
+        }
+
+        // Moves one period of a student's schedule onto a specific TA's timetable
+        // (or clears it entirely if newTaId is falsy) — the engine behind the
+        // Student Timetable modal's Assign/Change TA action. Removes it from
+        // wherever it currently sits first (cleaning up any linked cover entry),
+        // then places a fresh copy exactly as dragging the sidebar card there
+        // would, so Find Cover, right-click cancel, and Undo all keep working on
+        // it afterwards.
+        //
+        // No separate write is needed to "sync" every other student in the same
+        // identical class (same room/time) onto this TA — findTaForStudentPeriod
+        // already reports them as covered by this same entry via the code+room
+        // match, since a TA's timetable can only hold one entry per slot anyway
+        // (writing a second one for a sibling would just overwrite the first).
+        // If the slot already resolves to this exact TA (whether that's this
+        // student's own entry or a sibling's), there's nothing to do at all.
+        function moveStudentPeriodToTA(studentId, week, day, period, newTaId) {
+            const student = studentTimetables.find(s => s.id === studentId);
+            const cell = student && student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
+            if (!cell || !cell.code) return;
+
+            const current = findTaForStudentPeriod(studentId, week, day, period);
+            if (newTaId && current && current.ta.id === newTaId) return; // already covered by this TA — nothing to change
+
+            if (newTaId && !checkIdenticalClassConflicts(studentId, cell.code, cell.room, week, day, period, newTaId)) {
+                return;
+            }
+
+            pushUndoSnapshot();
+            placeSingleStudentPeriod(studentId, week, day, period, newTaId);
 
             if (currentStudentId === studentId) loadStudentPeriods(studentId); // keep sidebar cards in sync
             saveStateToStorage();
@@ -2956,6 +3046,11 @@
         function isBlockOrphaned(block) {
             let cd = {};
             try { cd = JSON.parse(block.dataset.classData || '{}'); } catch (e) {}
+            // A pure manual entry (Class or Duty, via the "+ Add class" flow) was
+            // never assigned FROM anywhere — it has no Class Need or Student
+            // record backing it at all, so there's nothing real to return it to;
+            // treat it the same as a source record that's since been deleted.
+            if (!cd.needId && !cd.studentId) return true;
             return !!(
                 (cd.needId && !classNeedsData.some(item => item.id === cd.needId)) ||
                 (cd.studentId && !studentTimetables.some(s => s.id === cd.studentId))
@@ -3044,8 +3139,13 @@
             if (!term) return [];
             const results = [];
 
-            // Already placed on some TA's timetable — covers Class Needs, student
-            // periods, and manual entries alike, since they all end up here.
+            // Already placed on some TA's timetable — Class Needs and manual/duty
+            // entries only here; a student-linked entry (cd.studentId) is handled
+            // by the per-student scan below instead, since that one resolves via
+            // findTaForStudentPeriod and so correctly covers a student sharing an
+            // identical class (same room/time) via someone ELSE's entry too —
+            // something this raw per-TA scan can't see (it only sees the one
+            // physical entry, recorded under whichever student's card created it).
             taDatabase.forEach(ta => {
                 ['A', 'B'].forEach(week => {
                     const weekData = ta.timetables[week];
@@ -3056,6 +3156,7 @@
                             if (!entry || !entry.classData) return;
                             let cd;
                             try { cd = JSON.parse(entry.classData); } catch (e) { return; }
+                            if (cd.studentId) return;
                             const haystack = [cd.title, cd.room, cd.teacher].filter(Boolean).join(' ');
                             if (!fuzzyMatch(term, haystack)) return;
                             results.push({
@@ -3080,7 +3181,10 @@
                 });
             });
 
-            // Still-unassigned student periods — likewise skipped if already placed.
+            // Every student's own period, resolved via findTaForStudentPeriod —
+            // one result per student, always reflecting their real status,
+            // whether that's their own placed entry, a sibling's identical class
+            // (same room/time) covering them too, or genuinely still unassigned.
             studentTimetables.forEach(student => {
                 ['A', 'B'].forEach(week => {
                     const weekData = student.entries[week];
@@ -3089,12 +3193,15 @@
                         Object.keys(weekData[day]).forEach(period => {
                             const cell = weekData[day][period];
                             if (!cell || !cell.code) return;
-                            if (isStudentPeriodAssigned(student.id, week, day, period)) return;
                             const haystack = [cell.code, cell.room, cell.teacher].filter(Boolean).join(' ');
                             if (!fuzzyMatch(term, haystack)) return;
+                            const taMatch = findTaForStudentPeriod(student.id, week, day, period);
                             results.push({
                                 kind: 'student', studentId: student.id, studentName: student.name, week, day, period,
-                                title: cell.code, teacher: cell.teacher, room: cell.room
+                                title: cell.code, teacher: cell.teacher, room: cell.room,
+                                taId: taMatch ? taMatch.ta.id : null,
+                                taName: taMatch ? taMatch.ta.name : null,
+                                covering: taMatch ? taMatch.covering : false
                             });
                         });
                     });
@@ -3150,8 +3257,10 @@
                     clickAttr = `onclick="jumpToSearchResultTA('${r.taId}','${r.week}','${r.day}','${r.period}')"`;
                     extraClass = 'cursor-pointer hover:bg-blue-50 hover:border-blue-200';
                 } else if (r.kind === 'student') {
-                    statusHtml = `<span class="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap">Unassigned</span>` +
-                        `<span class="text-gray-400 text-[10px] whitespace-nowrap">🎓 ${escapeHtml(r.studentName)}</span>`;
+                    statusHtml = r.taName
+                        ? `<span class="text-green-700 bg-green-100 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap">${escapeHtml(r.taName)}${r.covering ? ' (cover)' : ''}</span>`
+                        : `<span class="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap">Unassigned</span>`;
+                    statusHtml += `<span class="text-gray-400 text-[10px] whitespace-nowrap">🎓 ${escapeHtml(r.studentName)}</span>`;
                     clickAttr = `onclick="jumpToSearchResultStudent('${r.studentId}')"`;
                     extraClass = 'cursor-pointer hover:bg-blue-50 hover:border-blue-200';
                 } else {
@@ -3279,6 +3388,38 @@
             }
 
             return found;
+        }
+
+        // Every week ('A'/'B') this class code has been recorded under anywhere —
+        // across every student's schedule and every Class Need — used to warn if
+        // a manual entry's code is only ever known to happen in the OTHER week.
+        function getKnownWeeksForCode(code) {
+            const target = (code || '').trim().toLowerCase();
+            const weeks = new Set();
+            if (!target) return weeks;
+
+            studentTimetables.forEach(student => {
+                ['A', 'B'].forEach(week => {
+                    const weekEntries = student.entries[week] || {};
+                    DAY_OPTIONS.forEach(day => {
+                        const dayEntries = weekEntries[day] || {};
+                        PERIOD_OPTIONS.forEach(period => {
+                            const cellData = dayEntries[period];
+                            if (cellData && cellData.code && cellData.code.trim().toLowerCase() === target) {
+                                weeks.add(week);
+                            }
+                        });
+                    });
+                });
+            });
+
+            classNeedsData.forEach(item => {
+                if (item.title && item.week && item.title.trim().toLowerCase() === target) {
+                    weeks.add(item.week);
+                }
+            });
+
+            return weeks;
         }
 
         function startManualEntry(cell) {
@@ -3426,6 +3567,22 @@
             if (!codeInput) return;
             const code = codeInput.value.trim();
             if (!code) return;
+
+            // Foolproofing: if this code is only ever recorded under the OTHER
+            // week, warn before adding it here — same intent as the drag-and-drop
+            // week check above, just softer (a confirm, not a hard block) since a
+            // manual entry's "known week" is only inferred from other people's
+            // typing, not sourced from an authoritative record the way a dragged
+            // card's own week field is.
+            const cellWeek = cell.dataset.week;
+            const knownWeeks = getKnownWeeksForCode(code);
+            if (cellWeek && knownWeeks.size && !knownWeeks.has(cellWeek)) {
+                const otherWeeks = Array.from(knownWeeks).join(' & ');
+                const proceed = confirm(
+                    `"${code}" is only recorded under Week ${otherWeeks}, not Week ${cellWeek}.\n\nAdd it here anyway?`
+                );
+                if (!proceed) return;
+            }
 
             const matches = lookupClassCode(code);
             if (matches.length === 1) {
@@ -3622,6 +3779,17 @@
                             return;
                         }
 
+                        // Dragging a specific student's period onto a TA — check for a
+                        // same-class conflict (another student in the identical class
+                        // already covered by a different TA) BEFORE committing to
+                        // anything, same rule moveStudentPeriodToTA follows.
+                        const isNewPlacement = draggableElement.parentElement &&
+                            (draggableElement.parentElement.id === 'unassigned-high' || draggableElement.parentElement.id === 'unassigned-standard');
+                        if (isNewPlacement && draggedCd.studentId && zone.dataset.week &&
+                            !checkIdenticalClassConflicts(draggedCd.studentId, draggedCd.title, draggedCd.room, zone.dataset.week, zone.dataset.day, zone.dataset.period, currentActiveTA)) {
+                            return;
+                        }
+
                         pushUndoSnapshot();
                         const existingClass = zone.querySelector('.class-block');
                         if (existingClass && existingClass !== draggableElement) {
@@ -3660,14 +3828,19 @@
                                 block.classList.remove('is-dragging');
                             });
 
-                            zone.innerHTML = ''; 
+                            zone.innerHTML = '';
                             zone.appendChild(block);
                             zone.classList.remove('empty');
 
                             draggableElement.remove();
                             initCoverButtons();
                             saveCurrentTimetableState();
-                        } 
+
+                            // No separate write needed to cover every other student in
+                            // this identical class (same room/time) — findTaForStudentPeriod
+                            // already reports them as covered by this same entry via the
+                            // code+room match.
+                        }
                         else if (draggableElement.parentElement.classList.contains('drop-zone')) {
                             const sourceZone = draggableElement.parentElement;
                             
