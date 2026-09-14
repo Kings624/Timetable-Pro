@@ -433,6 +433,12 @@
 
             <!-- Secondary tools: icon-only with tooltips, grouped together -->
             <div class="flex items-center gap-1">
+                <button onclick="openGlobalSearchModal()" title="Search everywhere by class code, teacher, or room (Ctrl/Cmd+K)" class="flex items-center gap-1.5 px-2.5 py-2 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <span class="hidden xl:inline text-xs font-medium">Search</span>
+                </button>
                 <button onclick="openStatsModal()" title="Attendance & Cover Stats" class="flex items-center gap-1.5 px-2.5 py-2 rounded-md border border-transparent hover:bg-indigo-50 hover:border-indigo-200 text-indigo-700 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -1000,6 +1006,26 @@
             <div class="p-6 overflow-auto flex-1">
                 <div id="compare-grid-wrapper" class="flex gap-4 items-start"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- Global Search — type a class code, teacher, or room to see every
+         matching occurrence system-wide (already scheduled or still
+         pending), instead of checking every TA's grid one at a time. -->
+    <div id="global-search-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-start justify-center backdrop-blur-sm pt-24">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[70vh]">
+            <div class="p-4 border-b border-gray-200 flex items-center gap-3 shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="text" id="global-search-input" oninput="renderGlobalSearchResults(this.value)" placeholder="Search by class code, teacher, or room…" autocomplete="off" class="flex-1 text-sm focus:outline-none">
+                <button onclick="closeGlobalSearchModal()" class="text-gray-400 hover:text-gray-600 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div id="global-search-results" class="p-4 overflow-y-auto space-y-2"></div>
         </div>
     </div>
 
@@ -2936,6 +2962,153 @@
             return ti === term.length;
         }
 
+        // ---- Global reverse search: type a class code, teacher, or room and see
+        // every matching occurrence system-wide — already placed on a TA's
+        // timetable (with who), a student's own period not yet assigned to
+        // anyone, or a Class Need not yet placed — instead of checking every
+        // TA's grid one at a time to find "who's got E110" or "who covers
+        // 10y/Sc3". ----
+
+        function searchGlobal(query) {
+            const term = (query || '').trim();
+            if (!term) return [];
+            const results = [];
+
+            // Already placed on some TA's timetable — covers Class Needs, student
+            // periods, and manual entries alike, since they all end up here.
+            taDatabase.forEach(ta => {
+                ['A', 'B'].forEach(week => {
+                    const weekData = ta.timetables[week];
+                    if (!weekData) return;
+                    Object.keys(weekData).forEach(day => {
+                        Object.keys(weekData[day]).forEach(period => {
+                            const entry = weekData[day][period];
+                            if (!entry || !entry.classData) return;
+                            let cd;
+                            try { cd = JSON.parse(entry.classData); } catch (e) { return; }
+                            const haystack = [cd.title, cd.room, cd.teacher].filter(Boolean).join(' ');
+                            if (!fuzzyMatch(term, haystack)) return;
+                            results.push({
+                                kind: 'ta', taId: ta.id, taName: ta.name, week, day, period,
+                                title: cd.title, teacher: cd.teacher, room: cd.room,
+                                studentName: cd.student || null
+                            });
+                        });
+                    });
+                });
+            });
+
+            // Still-unassigned Class Needs (not on any TA's timetable yet) — an
+            // already-placed copy would already have matched above.
+            classNeedsData.forEach(item => {
+                if (isClassNeedAssigned(item.id)) return;
+                const haystack = [item.title, item.room, item.teacher].filter(Boolean).join(' ');
+                if (!fuzzyMatch(term, haystack)) return;
+                results.push({
+                    kind: 'need', needId: item.id, week: item.week, day: item.day, period: item.period,
+                    title: item.title, teacher: item.teacher, room: item.room
+                });
+            });
+
+            // Still-unassigned student periods — likewise skipped if already placed.
+            studentTimetables.forEach(student => {
+                ['A', 'B'].forEach(week => {
+                    const weekData = student.entries[week];
+                    if (!weekData) return;
+                    Object.keys(weekData).forEach(day => {
+                        Object.keys(weekData[day]).forEach(period => {
+                            const cell = weekData[day][period];
+                            if (!cell || !cell.code) return;
+                            if (isStudentPeriodAssigned(student.id, week, day, period)) return;
+                            const haystack = [cell.code, cell.room, cell.teacher].filter(Boolean).join(' ');
+                            if (!fuzzyMatch(term, haystack)) return;
+                            results.push({
+                                kind: 'student', studentId: student.id, studentName: student.name, week, day, period,
+                                title: cell.code, teacher: cell.teacher, room: cell.room
+                            });
+                        });
+                    });
+                });
+            });
+
+            // Substring matches on the class code itself first, then everything
+            // else in a stable Week/Day/Period order.
+            const lowerTerm = term.toLowerCase();
+            results.sort((a, b) => {
+                const scoreA = (a.title || '').toLowerCase().includes(lowerTerm) ? 0 : 1;
+                const scoreB = (b.title || '').toLowerCase().includes(lowerTerm) ? 0 : 1;
+                if (scoreA !== scoreB) return scoreA - scoreB;
+                if (a.week !== b.week) return a.week.localeCompare(b.week);
+                if (a.day !== b.day) return DAY_OPTIONS.indexOf(a.day) - DAY_OPTIONS.indexOf(b.day);
+                return PERIOD_OPTIONS.indexOf(a.period) - PERIOD_OPTIONS.indexOf(b.period);
+            });
+
+            return results;
+        }
+
+        function openGlobalSearchModal() {
+            const input = document.getElementById('global-search-input');
+            input.value = '';
+            renderGlobalSearchResults('');
+            document.getElementById('global-search-modal').classList.remove('hidden');
+            setTimeout(() => input.focus(), 50);
+        }
+
+        function closeGlobalSearchModal() {
+            document.getElementById('global-search-modal').classList.add('hidden');
+        }
+
+        function renderGlobalSearchResults(query) {
+            const listEl = document.getElementById('global-search-results');
+            const term = (query || '').trim();
+            if (!term) {
+                listEl.innerHTML = '<div class="text-sm text-gray-400 italic p-6 text-center">Type a class code, teacher, or room to see every match.</div>';
+                return;
+            }
+            const results = searchGlobal(term);
+            if (!results.length) {
+                listEl.innerHTML = `<div class="text-sm text-gray-400 italic p-6 text-center">No matches for "${escapeHtml(term)}".</div>`;
+                return;
+            }
+            listEl.innerHTML = results.map(r => {
+                const meta = `Week ${r.week} · ${r.day} · Period ${r.period}`;
+                const detail = [r.teacher, r.room].filter(Boolean).join(' · ');
+                let statusHtml, clickAttr = '', extraClass = '';
+                if (r.kind === 'ta') {
+                    statusHtml = `<span class="text-green-700 bg-green-100 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap">${escapeHtml(r.taName)}</span>` +
+                        (r.studentName ? `<span class="text-gray-400 text-[10px] whitespace-nowrap">🎓 ${escapeHtml(r.studentName)}</span>` : '');
+                    clickAttr = `onclick="jumpToSearchResultTA('${r.taId}','${r.week}','${r.day}','${r.period}')"`;
+                    extraClass = 'cursor-pointer hover:bg-blue-50 hover:border-blue-200';
+                } else if (r.kind === 'student') {
+                    statusHtml = `<span class="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap">Unassigned</span>` +
+                        `<span class="text-gray-400 text-[10px] whitespace-nowrap">🎓 ${escapeHtml(r.studentName)}</span>`;
+                    clickAttr = `onclick="jumpToSearchResultStudent('${r.studentId}')"`;
+                    extraClass = 'cursor-pointer hover:bg-blue-50 hover:border-blue-200';
+                } else {
+                    statusHtml = `<span class="text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap">Class Need — unassigned</span>`;
+                }
+                return `
+                    <div class="p-3 border border-gray-200 rounded-lg flex flex-col gap-1 transition-colors ${extraClass}" ${clickAttr}>
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="font-medium text-gray-800 text-sm">${escapeHtml(r.title || '(untitled)')}</div>
+                            <div class="flex items-center gap-1.5 shrink-0">${statusHtml}</div>
+                        </div>
+                        <div class="text-xs text-gray-500">${meta}${detail ? ' · ' + escapeHtml(detail) : ''}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function jumpToSearchResultTA(taId, week, day, period) {
+            closeGlobalSearchModal();
+            jumpToTAForPlacement(taId, week, day, period); // reuses the same switch-TA + highlight behavior
+        }
+
+        function jumpToSearchResultStudent(studentId) {
+            closeGlobalSearchModal();
+            openStudentTimetableModal(studentId);
+        }
+
         // Which day the "Day" filter row is currently restricting cards to — 'all'
         // means no restriction. Combined with the text filter below so both apply
         // together; reset to 'all' whenever a (different) student is selected.
@@ -4221,6 +4394,14 @@
         // exactly as expected there (this app's undo is for scheduling actions, not
         // keystrokes).
         document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd+K opens Global Search from anywhere, even while typing in
+            // another field — unlike Undo/Redo below, it can't clash with typing.
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                openGlobalSearchModal();
+                return;
+            }
+
             const tag = (e.target && e.target.tagName || '').toLowerCase();
             const isEditableField = tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target && e.target.isContentEditable);
             if (isEditableField) return;
