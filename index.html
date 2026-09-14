@@ -301,42 +301,7 @@
            left the last period(s) clipped with no way to scroll to them. */
         .main-panel {
             height: calc(100vh - 4rem);
-            overflow: auto; /* both axes — on a narrow window the timetable itself is wider than the panel */
-        }
-
-        /* On-screen scroll pad (see #scroll-pad): a fixed, always-reachable
-           way to move the main timetable panel in any direction, for anyone
-           whose trackpad/mouse-wheel gesture over that specific panel isn't
-           reaching the rest of its content, or on a touch device. */
-        .scroll-pad-btn {
-            position: absolute;
-            width: 2.25rem;
-            height: 2.25rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: rgba(255, 255, 255, 0.95);
-            border: 1px solid #d1d5db;
-            border-radius: 9999px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-            color: #4b5563;
-            cursor: pointer;
-            transition: background-color 0.15s, transform 0.1s;
-        }
-        .scroll-pad-btn:hover {
-            background-color: #eff6ff;
-            color: #2563eb;
-        }
-        .scroll-pad-btn:active {
-            transform: scale(0.92);
-            background-color: #dbeafe;
-        }
-        .scroll-pad-hub {
-            position: absolute;
-            width: 0.5rem;
-            height: 0.5rem;
-            border-radius: 9999px;
-            background-color: #d1d5db;
+            overflow-y: auto;
         }
 
         /* Hide scrollbar for a cleaner look */
@@ -746,36 +711,6 @@
             </div>
 
         </main>
-    </div>
-
-    <!-- On-screen scroll pad — nudges the main timetable panel up/down/left/
-         right. Click for a step, press-and-hold to keep moving. Sits at
-         z-40, below every modal (z-50), so it's naturally covered up and out
-         of the way whenever one is open. -->
-    <div id="scroll-pad" class="fixed bottom-6 right-6 z-40 select-none">
-        <div class="relative w-[7.5rem] h-[7.5rem]">
-            <div class="scroll-pad-hub" style="top: 50%; left: 50%; transform: translate(-50%, -50%);"></div>
-            <button type="button" class="scroll-pad-btn" style="top: 0; left: 50%; transform: translateX(-50%);" data-dx="0" data-dy="-1" title="Scroll up" aria-label="Scroll up">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7" />
-                </svg>
-            </button>
-            <button type="button" class="scroll-pad-btn" style="bottom: 0; left: 50%; transform: translateX(-50%);" data-dx="0" data-dy="1" title="Scroll down" aria-label="Scroll down">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
-            <button type="button" class="scroll-pad-btn" style="left: 0; top: 50%; transform: translateY(-50%);" data-dx="-1" data-dy="0" title="Scroll left" aria-label="Scroll left">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
-                </svg>
-            </button>
-            <button type="button" class="scroll-pad-btn" style="right: 0; top: 50%; transform: translateY(-50%);" data-dx="1" data-dy="0" title="Scroll right" aria-label="Scroll right">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-                </svg>
-            </button>
-        </div>
     </div>
 
     <!-- Find Cover TA smart-matching modal -->
@@ -4483,39 +4418,6 @@
                 performRedo();
             }
         });
-
-        // On-screen scroll pad (#scroll-pad): nudges the main timetable panel in
-        // any direction — a fallback for anyone whose trackpad/mouse-wheel
-        // gesture over that specific panel isn't reaching content below the
-        // fold, and a real control for touch devices. Click for one step,
-        // press-and-hold (mouse or touch) to keep moving.
-        (function setupScrollPad() {
-            const STEP = 220; // roughly one timetable row
-            const REPEAT_MS = 90;
-            let repeatTimer = null;
-
-            function nudge(dx, dy) {
-                const panel = document.querySelector('.main-panel');
-                if (panel) panel.scrollBy(dx * STEP, dy * STEP);
-            }
-
-            document.querySelectorAll('#scroll-pad .scroll-pad-btn').forEach(btn => {
-                const dx = parseInt(btn.dataset.dx, 10) || 0;
-                const dy = parseInt(btn.dataset.dy, 10) || 0;
-
-                const start = (e) => {
-                    e.preventDefault();
-                    nudge(dx, dy);
-                    clearInterval(repeatTimer);
-                    repeatTimer = setInterval(() => nudge(dx, dy), REPEAT_MS);
-                };
-                const stop = () => clearInterval(repeatTimer);
-
-                btn.addEventListener('mousedown', start);
-                btn.addEventListener('touchstart', start, { passive: false });
-                ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(evt => btn.addEventListener(evt, stop));
-            });
-        })();
 
         // Turn one period of a student's timetable into a draggable card, same shape
         // as the Class Needs cards so all the existing drag/drop/undo/cover logic
