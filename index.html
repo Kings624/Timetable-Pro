@@ -55,11 +55,22 @@
     <title>TA Timetable Scheduler Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         /* Custom styles for drag and drop interactions and timetable layout */
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background-color: #f3f4f6; /* Tailwind gray-100 */
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+
+        /* Inter's tabular figures keep times/periods lined up in columns
+           instead of jittering as digit widths vary. */
+        .time-label, .timetable-cell, .compare-cell, select, input {
+            font-variant-numeric: tabular-nums;
         }
         
         .timetable-grid {
@@ -76,6 +87,10 @@
             min-height: 80px;
             position: relative;
             transition: background-color 0.2s;
+        }
+
+        .timetable-cell.empty:hover {
+            background-color: #f8fafc; /* Tailwind slate-50 — a quiet hint this cell is actionable */
         }
 
         .timetable-header {
@@ -367,7 +382,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <h1 class="text-lg font-bold text-gray-800 whitespace-nowrap hidden lg:block">TA Timetable Manager</h1>
+            <h1 class="text-lg font-bold text-gray-900 tracking-tight whitespace-nowrap hidden lg:block">TA Timetable Manager</h1>
             <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap hidden xl:inline-block">New Academic Year</span>
             <button onclick="refreshFromCloud()" title="Click to check for updates from the shared cloud data" class="flex items-center gap-1.5 ml-1 pl-3 border-l border-gray-200 hover:bg-gray-50 rounded-r-md py-1 pr-2 transition-colors">
                 <span id="connection-status-dot" class="inline-block w-2.5 h-2.5 rounded-full bg-gray-300 shrink-0"></span>
@@ -418,25 +433,24 @@
 
             <!-- Secondary tools: icon-only with tooltips, grouped together -->
             <div class="flex items-center gap-1">
-                <button onclick="openStatsModal()" title="Stats Dashboard" class="p-2.5 rounded-md border border-transparent hover:bg-indigo-50 hover:border-indigo-200 text-indigo-700 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <button onclick="openStatsModal()" title="Attendance & Cover Stats" class="flex items-center gap-1.5 px-2.5 py-2 rounded-md border border-transparent hover:bg-indigo-50 hover:border-indigo-200 text-indigo-700 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
+                    <span class="hidden xl:inline text-xs font-medium">Stats</span>
                 </button>
-                <button onclick="exportTimetableToPDF()" title="Export PDF" class="p-2.5 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <button onclick="exportTimetableToPDF()" title="Export this TA's timetable as a PDF" class="flex items-center gap-1.5 px-2.5 py-2 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
+                    <span class="hidden xl:inline text-xs font-medium">Export PDF</span>
                 </button>
-                <button onclick="autoScheduleActiveTA()" title="Auto-Schedule (Demo)" class="p-2.5 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <button onclick="openCompareModal()" title="Compare View — line several timetables up side by side" class="flex items-center gap-1.5 px-2.5 py-2 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6a2 2 0 012-2h4v16H5a2 2 0 01-2-2V6zM15 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4V4z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 4v16M15 4v16" />
                     </svg>
-                </button>
-                <button onclick="openCompareModal()" title="Compare View — line multiple timetables up side by side" class="p-2.5 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 4v16M4 6a2 2 0 012-2h3v16H6a2 2 0 01-2-2V6zm11-2h3a2 2 0 012 2v12a2 2 0 01-2 2h-3V4z" />
-                    </svg>
+                    <span class="hidden xl:inline text-xs font-medium">Compare</span>
                 </button>
             </div>
 
@@ -2764,7 +2778,7 @@
                     const day = cell.dataset.day;
                     const period = cell.dataset.period;
                     
-                    // Reset to the default placeholder (empty cells show a "+ Manual entry" hint)
+                    // Reset to the default placeholder (empty cells show a "+ Add class" hint)
                     cell.innerHTML = emptyCellContent(cell);
                     
                     // Check whether this TA has a class in this week/day/period
@@ -2973,7 +2987,7 @@
             if (cell.classList.contains('lunch-cell')) {
                 return '<div class="text-[10px] text-center text-yellow-600/60 mt-4">Drop class or Lunch</div>';
             }
-            return '<div class="manual-add-hint text-[10px] text-center text-gray-300 hover:text-blue-500 cursor-pointer mt-6" onclick="startManualEntry(this.closest(\'.drop-zone\'))">+ Manual entry</div>';
+            return '<div class="manual-add-hint text-[10px] text-center text-gray-400 hover:text-blue-600 cursor-pointer mt-6 font-medium transition-colors" onclick="startManualEntry(this.closest(\'.drop-zone\'))">+ Add class</div>';
         }
 
         // Look up a class code against every code we already know about, so typing
@@ -3205,7 +3219,7 @@
 
             initCoverButtons();
             rebuildStudentSelector();
-            loadTimetableForActiveTA(); // render the default TA's grid (adds the "+ Manual entry" hints to empty cells)
+            loadTimetableForActiveTA(); // render the default TA's grid (adds the "+ Add class" hints to empty cells)
 
             // High Priority / Standard Needs are two independent drop targets:
             // whichever zone a card is dropped into, it stays there — never auto-moved elsewhere.
@@ -3672,10 +3686,6 @@
                 saveCurrentTimetableState();
             }
             closeCoverModal();
-        }
-
-        function autoScheduleActiveTA() {
-            alert(`Auto-Schedule triggered for ${currentActiveTA}. (Demo feature: you can drag classes manually or prepare batch import)`);
         }
 
         function openStatsModal() {
