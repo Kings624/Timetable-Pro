@@ -118,27 +118,40 @@
         /* Compare View: draggable-to-reorder cards, each a compact mini-grid,
            shown several at a time side by side (see #compare-modal /
            renderCompareColumnHtml) — a digital stand-in for spreading paper
-           timetables across a desk. */
+           timetables across a desk. Sizing scales with how many are lined up
+           at once (see #compare-grid-wrapper's compare-density-* class, set in
+           renderCompareGrid): a couple of cards get room to breathe at a
+           readable size, many at once shrink to still fit without scrolling
+           forever. Defaults below are the "cozy" (1-2 cards) tier. */
         .compare-column {
-            width: 220px;
+            width: 300px;
             background-color: white;
             border: 1px solid #e5e7eb;
             border-radius: 0.5rem;
             box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
-            padding: 0.625rem;
+            padding: 0.75rem;
             transition: box-shadow 0.15s, opacity 0.15s;
         }
         .compare-column.is-dragging {
             opacity: 0.4;
         }
+        /* Insertion-point feedback while dragging a card over another one —
+           which side lights up follows the cursor's half of the target card,
+           so the drop lands where it visually looks like it will. */
+        .compare-column.drop-before {
+            box-shadow: -3px 0 0 0 #3b82f6, 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+        }
+        .compare-column.drop-after {
+            box-shadow: 3px 0 0 0 #3b82f6, 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+        }
         .compare-column-title {
             display: flex;
             align-items: center;
-            gap: 0.25rem;
+            gap: 0.3rem;
             font-weight: 700;
-            font-size: 0.8rem;
+            font-size: 0.95rem;
             color: #1f2937;
-            margin-bottom: 0.375rem;
+            margin-bottom: 0.5rem;
             cursor: grab;
         }
         .compare-column-title:active {
@@ -150,27 +163,27 @@
             table-layout: fixed;
         }
         .compare-table th {
-            font-size: 0.625rem;
+            font-size: 0.75rem;
             font-weight: 600;
             color: #6b7280;
             background-color: #f9fafb;
             border: 1px solid #e5e7eb;
-            padding: 2px;
+            padding: 4px;
         }
         .compare-time-label {
-            font-size: 0.625rem;
+            font-size: 0.75rem;
             color: #6b7280;
             background-color: #f9fafb;
             border: 1px solid #e5e7eb;
-            padding: 2px 4px;
+            padding: 3px 5px;
             white-space: nowrap;
         }
         .compare-cell {
-            font-size: 0.625rem;
+            font-size: 0.75rem;
             border: 1px solid #e5e7eb;
-            padding: 2px 3px;
+            padding: 4px 5px;
             vertical-align: top;
-            min-height: 34px;
+            min-height: 46px;
             word-break: break-word;
         }
         .compare-cell-clickable {
@@ -180,6 +193,22 @@
         .compare-cell-clickable:hover {
             background-color: #eff6ff;
         }
+
+        /* "normal" tier: 3-4 cards lined up */
+        .compare-density-normal .compare-column { width: 230px; padding: 0.625rem; }
+        .compare-density-normal .compare-column-title { font-size: 0.825rem; margin-bottom: 0.375rem; }
+        .compare-density-normal .compare-table th,
+        .compare-density-normal .compare-time-label,
+        .compare-density-normal .compare-cell { font-size: 0.6875rem; padding: 3px 4px; }
+        .compare-density-normal .compare-cell { min-height: 36px; }
+
+        /* "compact" tier: 5+ cards lined up — still legible, just tight */
+        .compare-density-compact .compare-column { width: 175px; padding: 0.5rem; }
+        .compare-density-compact .compare-column-title { font-size: 0.75rem; margin-bottom: 0.25rem; }
+        .compare-density-compact .compare-table th,
+        .compare-density-compact .compare-time-label,
+        .compare-density-compact .compare-cell { font-size: 0.625rem; padding: 2px 3px; }
+        .compare-density-compact .compare-cell { min-height: 30px; }
 
         /* Drag and Drop specific styles */
         .draggable-class {
@@ -425,21 +454,21 @@
             <div class="flex items-center gap-1.5">
                 <span class="text-sm font-medium text-gray-600 hidden md:inline">TA:</span>
                 <select id="ta-selector" onchange="switchActiveTA(this.value)" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 font-semibold">
-                    <option value="umaira">Umaira</option>
-                    <option value="sharena">Sharena</option>
-                    <option value="shahanaz">Shahanaz</option>
-                    <option value="nadia">Nadia</option>
-                    <option value="muslima">Muslima</option>
-                    <option value="maria">Maria</option>
-                    <option value="lidia">Lidia</option>
-                    <option value="janice">Janice</option>
-                    <option value="hamza">Hamza</option>
-                    <option value="esme">Esme</option>
-                    <option value="chantal">Chantal</option>
-                    <option value="bilkis">Bilkis</option>
-                    <option value="antonia">Antonia</option>
-                    <option value="anisa">Anisa</option>
                     <option value="andrew" selected>Andrew</option>
+                    <option value="anisa">Anisa</option>
+                    <option value="antonia">Antonia</option>
+                    <option value="bilkis">Bilkis</option>
+                    <option value="chantal">Chantal</option>
+                    <option value="esme">Esme</option>
+                    <option value="hamza">Hamza</option>
+                    <option value="janice">Janice</option>
+                    <option value="lidia">Lidia</option>
+                    <option value="maria">Maria</option>
+                    <option value="muslima">Muslima</option>
+                    <option value="nadia">Nadia</option>
+                    <option value="shahanaz">Shahanaz</option>
+                    <option value="sharena">Sharena</option>
+                    <option value="umaira">Umaira</option>
                 </select>
             </div>
 
@@ -1017,8 +1046,8 @@
          student) rendered read-only, side by side, so they can be cross-checked
          visually the way spreading paper printouts out on a desk would let you,
          without flipping back and forth between single views. -->
-    <div id="compare-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-[96vw] overflow-hidden flex flex-col max-h-[92vh]">
+    <div id="compare-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm p-6">
+        <div class="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-w-[96vw] max-h-[92vh] min-w-[22rem]">
             <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
                 <h3 class="font-bold text-gray-800 text-lg flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1038,7 +1067,7 @@
                     <button id="compare-week-b" onclick="setCompareWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">Week B</button>
                 </div>
                 <div class="text-xs text-gray-500 shrink-0">Line up:</div>
-                <div id="compare-picker-list" class="flex flex-wrap gap-1.5 flex-1"></div>
+                <div id="compare-picker-list" class="flex flex-wrap gap-1.5 max-w-[34rem]"></div>
             </div>
             <div class="p-6 overflow-auto flex-1">
                 <div id="compare-grid-wrapper" class="flex gap-4 items-start"></div>
@@ -1368,11 +1397,11 @@
         function refreshTaSelectorOptions() {
             const selector = document.getElementById('ta-selector');
             if (!selector) return;
-            // Descending by name (Z→A) — matches the order the options are hand-
+            // Ascending by name (A→Z) — matches the order the options are hand-
             // written in above, so a rebuild here (after undo/redo, loading saved
             // data, or Data Setup changes) doesn't silently revert to whatever
             // order taDatabase itself happens to be in.
-            const sorted = [...taDatabase].sort((a, b) => b.name.localeCompare(a.name));
+            const sorted = [...taDatabase].sort((a, b) => a.name.localeCompare(b.name));
             selector.innerHTML = sorted.map(ta => `<option value="${escapeHtml(ta.id)}">${escapeHtml(ta.name)}</option>`).join('');
             if (taDatabase.find(ta => ta.id === currentActiveTA)) {
                 selector.value = currentActiveTA;
@@ -5148,7 +5177,7 @@
             const key = kind + ':' + id;
             return `
                 <div class="compare-column shrink-0" data-compare-key="${escapeHtml(key)}"
-                     ondragover="compareDragOver(event)" ondrop="compareDrop(event, '${key}')">
+                     ondragover="compareDragOver(event)" ondragleave="compareDragLeave(event)" ondrop="compareDrop(event, '${key}')">
                     <div class="compare-column-title" draggable="true"
                          ondragstart="compareDragStart(event, '${key}')" ondragend="compareDragEnd(event)">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -5164,8 +5193,19 @@
             `;
         }
 
+        // Sizing scales with how many cards are lined up at once — a couple of
+        // cards get room to breathe at a comfortably readable size, several at
+        // once shrink to still fit without endless horizontal scrolling. See
+        // the .compare-density-* rules alongside .compare-column above.
+        function compareDensityClass(count) {
+            if (count <= 2) return '';
+            if (count <= 4) return 'compare-density-normal';
+            return 'compare-density-compact';
+        }
+
         function renderCompareGrid() {
             const wrapper = document.getElementById('compare-grid-wrapper');
+            wrapper.className = 'flex gap-4 items-start ' + compareDensityClass(compareOrder.length);
             if (compareOrder.length === 0) {
                 wrapper.innerHTML = '<div class="text-sm text-gray-400 italic p-6">Pick at least one TA or student above to compare.</div>';
                 return;
@@ -5178,6 +5218,9 @@
 
         // Drag-to-reorder the compare cards, like rearranging paper printouts —
         // purely a display-order change (compareOrder), no data is touched.
+        // Tracks which half of the hovered card the cursor is over so the drop
+        // lands on whichever side it visually looks like it will, with a
+        // matching highlight while dragging rather than always inserting after.
         function compareDragStart(e, key) {
             compareDragKey = key;
             e.dataTransfer.effectAllowed = 'move';
@@ -5185,25 +5228,45 @@
             const card = e.currentTarget.closest('.compare-column');
             if (card) card.classList.add('is-dragging');
         }
+        function compareCardSideBefore(e, card) {
+            const rect = card.getBoundingClientRect();
+            return (e.clientX - rect.left) < rect.width / 2;
+        }
         function compareDragOver(e) {
             if (!compareDragKey) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
+            const card = e.currentTarget;
+            if (card.dataset.compareKey === compareDragKey) return;
+            const before = compareCardSideBefore(e, card);
+            if (!card.classList.contains(before ? 'drop-before' : 'drop-after')) {
+                card.classList.remove('drop-before', 'drop-after');
+                card.classList.add(before ? 'drop-before' : 'drop-after');
+            }
+        }
+        function compareDragLeave(e) {
+            // Ignore moving between child elements within the same card (e.g.
+            // over the table inside it) — only clear the highlight once the
+            // cursor has actually left the card, or this flickers constantly.
+            if (e.currentTarget.contains(e.relatedTarget)) return;
+            e.currentTarget.classList.remove('drop-before', 'drop-after');
         }
         function compareDrop(e, targetKey) {
             e.preventDefault();
+            const before = compareCardSideBefore(e, e.currentTarget);
+            document.querySelectorAll('.compare-column').forEach(el => el.classList.remove('drop-before', 'drop-after'));
             if (!compareDragKey || compareDragKey === targetKey) return;
             const fromIdx = compareOrder.indexOf(compareDragKey);
-            const toIdx = compareOrder.indexOf(targetKey);
-            if (fromIdx === -1 || toIdx === -1) return;
+            if (fromIdx === -1) return;
             compareOrder.splice(fromIdx, 1);
-            // Re-find the target's index after removal, then drop the card just after it.
-            compareOrder.splice(compareOrder.indexOf(targetKey) + 1, 0, compareDragKey);
+            let toIdx = compareOrder.indexOf(targetKey);
+            if (toIdx === -1) toIdx = compareOrder.length - 1;
+            compareOrder.splice(before ? toIdx : toIdx + 1, 0, compareDragKey);
             renderCompareGrid();
         }
         function compareDragEnd(e) {
             compareDragKey = null;
-            document.querySelectorAll('.compare-column.is-dragging').forEach(el => el.classList.remove('is-dragging'));
+            document.querySelectorAll('.compare-column').forEach(el => el.classList.remove('is-dragging', 'drop-before', 'drop-after'));
         }
     </script>
 </body>
