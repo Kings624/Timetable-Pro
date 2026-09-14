@@ -105,7 +105,7 @@
 
         .time-label {
             background-color: #f9fafb;
-            font-size: 0.75rem;
+            font-size: 0.8125rem;
             color: #6b7280;
             display: flex;
             flex-direction: column;
@@ -244,7 +244,7 @@
             border-radius: 4px;
             padding: 0.25rem 0.5rem;
             margin-bottom: 0.25rem;
-            font-size: 0.75rem;
+            font-size: 0.8125rem;
             display: flex;
             flex-direction: column;
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
@@ -259,7 +259,7 @@
             display: none;
             background-color: #f59e0b; /* Tailwind amber-500 */
             color: white;
-            font-size: 0.65rem;
+            font-size: 0.7rem;
             padding: 2px 6px;
             border-radius: 9999px;
             cursor: pointer;
@@ -280,11 +280,12 @@
         .class-title {
             font-weight: 600;
             color: #1e3a8a;
+            font-size: 0.85rem;
         }
 
         .class-detail {
             color: #475569;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
         }
 
         /* Tools sidebar */
@@ -318,6 +319,35 @@
             border-bottom: 2px solid #3b82f6;
             color: #2563eb;
             font-weight: 600;
+        }
+
+        /* Week A / Week B get their own accent everywhere a week toggle appears
+           (main view, Student Timetable modal, Compare View) — consistent with
+           the blue/purple already used to tell them apart on the sidebar's
+           student period cards — so which week is showing stays obvious without
+           having to read the tab label. Targets the IDs directly rather than
+           touching .tab-btn.active itself, since that class is shared with
+           unrelated tab groups (Data Setup, etc.) that have nothing to do with
+           weeks. */
+        #btn-week-a.active, #student-grid-btn-a.active, #student-modal-week-a.active, #compare-week-a.active {
+            border-bottom-color: #2563eb; /* blue-600 */
+            color: #2563eb;
+        }
+        #btn-week-b.active, #student-grid-btn-b.active, #student-modal-week-b.active, #compare-week-b.active {
+            border-bottom-color: #9333ea; /* purple-600 */
+            color: #9333ea;
+        }
+
+        /* Ambient tint on the main grid's header row and time-label column so
+           which week is showing stays visible even scrolled past the tabs.
+           The day-name header row is shared markup (only one body is ever
+           visible at once), so it's tinted via a class toggled in toggleWeek()
+           rather than an #timetable-body-a/b ancestor scope. */
+        #timetable-body-a .time-label, .week-a-active .timetable-header {
+            background-color: #eff6ff; /* blue-50 */
+        }
+        #timetable-body-b .time-label, .week-b-active .timetable-header {
+            background-color: #faf5ff; /* purple-50 */
         }
 
         /* Print-only timetable (built dynamically by exportTimetableToPDF) —
@@ -478,6 +508,10 @@
     <div id="printable-timetable"></div>
     <input type="file" id="import-data-file-input" accept="application/json" class="hidden" onchange="importDataFromFile(this)">
 
+    <!-- Hover roster popover — see showClassRosterTooltip/hideClassRosterTooltip.
+         Positioned in JS on mouseenter of a placed class-block. -->
+    <div id="class-roster-tooltip" class="hidden fixed z-40 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 max-w-[220px] max-h-56 overflow-y-auto pointer-events-none"></div>
+
     <!-- Main Content Area -->
     <div class="flex flex-1 overflow-hidden min-h-0">
         
@@ -558,8 +592,11 @@
             <!-- Timetable Container -->
             <div class="w-full max-w-6xl bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
                 
-                <!-- Header row -->
-                <div class="timetable-grid sticky top-0 z-10 shadow-sm">
+                <!-- Header row — shared by both weeks (only one body is ever visible
+                     at a time), so its own week-tint is toggled in JS by toggleWeek()
+                     rather than scoped by #timetable-body-a/b like the rest of the
+                     week-tint rules, which only reach elements duplicated per week. -->
+                <div id="timetable-header-row" class="timetable-grid sticky top-0 z-10 shadow-sm week-a-active">
                     <div class="timetable-header time-label border-b border-gray-200">Time</div>
                     <div class="timetable-header">Monday</div>
                     <div class="timetable-header">Tuesday</div>
@@ -2647,6 +2684,29 @@
             return fallback;
         }
 
+        // Every student whose OWN recorded schedule has this exact class — same
+        // code, same room, same Week/Day/Period — regardless of whether their
+        // period happens to be assigned to any TA yet. Used by the hover roster
+        // on a placed class-block (see initCoverButtons) to answer "who's
+        // actually in this room with me right now" from a TA's own timetable.
+        // Requires a room on both sides — with no location to match on, "the
+        // same class" isn't a well-defined question (a Duty block, for one,
+        // never matches anything here).
+        function getStudentsInSameClass(title, room, week, day, period) {
+            const t = (title || '').trim().toLowerCase();
+            const r = (room || '').trim().toLowerCase();
+            if (!t || !r) return [];
+            const names = [];
+            studentTimetables.forEach(student => {
+                const cell = student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
+                if (!cell || !cell.code) return;
+                if (cell.code.trim().toLowerCase() === t && (cell.room || '').trim().toLowerCase() === r) {
+                    names.push(student.name);
+                }
+            });
+            return names;
+        }
+
         // Clears one TA's placed entry for a slot, first cleaning up any linked
         // cover entry on the other side (the same rule cancelPlacement follows)
         // so reassigning a covered period doesn't leave the other half orphaned.
@@ -3168,7 +3228,11 @@
         // a subtle "+" hint that opens the manual-entry form.
         function emptyCellContent(cell) {
             if (cell.classList.contains('lunch-cell')) {
-                return '<div class="text-[10px] text-center text-yellow-600/60 mt-4">Drop class or Lunch</div>';
+                // Same clickable "+ Add class" affordance as every other empty cell
+                // (Period 4a/4b were drop targets already, just missing the manual-
+                // entry click handler everywhere else already has) — the "or Lunch"
+                // wording stays since dragging a class in still works exactly the same.
+                return '<div class="manual-add-hint text-[10px] text-center text-yellow-700/70 hover:text-blue-600 cursor-pointer mt-4 font-medium transition-colors" onclick="startManualEntry(this.closest(\'.drop-zone\'))">+ Add class <span class="opacity-70">(or Lunch)</span></div>';
             }
             return '<div class="manual-add-hint text-[10px] text-center text-gray-400 hover:text-blue-600 cursor-pointer mt-6 font-medium transition-colors" onclick="startManualEntry(this.closest(\'.drop-zone\'))">+ Add class</div>';
         }
@@ -3414,27 +3478,30 @@
             const btnB = document.getElementById('btn-week-b');
             const bodyA = document.getElementById('timetable-body-a');
             const bodyB = document.getElementById('timetable-body-b');
+            const headerRow = document.getElementById('timetable-header-row');
 
             if (week === 'A') {
                 btnA.classList.replace('text-gray-600', 'active');
                 btnA.classList.replace('hover:text-gray-900', 'bg-white');
                 btnA.classList.add('shadow');
-                
+
                 btnB.classList.remove('active', 'bg-white', 'shadow');
                 btnB.classList.add('text-gray-600', 'hover:text-gray-900');
-                
+
                 bodyA.classList.remove('hidden');
                 bodyB.classList.add('hidden');
+                if (headerRow) headerRow.classList.replace('week-b-active', 'week-a-active');
             } else {
                 btnB.classList.replace('text-gray-600', 'active');
                 btnB.classList.replace('hover:text-gray-900', 'bg-white');
                 btnB.classList.add('shadow');
-                
+
                 btnA.classList.remove('active', 'bg-white', 'shadow');
                 btnA.classList.add('text-gray-600', 'hover:text-gray-900');
-                
+
                 bodyB.classList.remove('hidden');
                 bodyA.classList.add('hidden');
+                if (headerRow) headerRow.classList.replace('week-a-active', 'week-b-active');
             }
         }
 
@@ -3696,6 +3763,15 @@
                     });
                 }
 
+                // Hover roster: same JS-property-guard pattern as _cancelBound above,
+                // for the same reason (a dataset flag would survive into the saved
+                // HTML and wrongly skip rebinding after a reload).
+                if (!block._rosterHoverBound) {
+                    block._rosterHoverBound = true;
+                    block.addEventListener('mouseenter', () => showClassRosterTooltip(block));
+                    block.addEventListener('mouseleave', hideClassRosterTooltip);
+                }
+
                 // Always replace the Find Cover button rather than reusing one found in the
                 // markup — the button element itself survives a save/reload cycle (it's
                 // plain HTML), but a handler assigned via `.onclick` does not, so a "stale"
@@ -3721,6 +3797,44 @@
                 };
                 block.appendChild(btn);
             });
+        }
+
+        // Hover roster: who's actually in this room for this class, drawn from
+        // every student's own recorded schedule (see getStudentsInSameClass) —
+        // not just whichever one student's period this particular TA-block
+        // happens to have come from. Silently does nothing for a block with no
+        // room (a Duty) or with no matches, rather than showing an empty popover.
+        function showClassRosterTooltip(block) {
+            const zone = block.closest('.drop-zone');
+            if (!zone) return;
+            let cd = {};
+            try { cd = JSON.parse(block.dataset.classData || '{}'); } catch (e) {}
+            if (!cd.room) return;
+
+            const week = zone.dataset.week, day = zone.dataset.day, period = zone.dataset.period;
+            const names = getStudentsInSameClass(cd.title, cd.room, week, day, period);
+            if (!names.length) return;
+
+            const tooltip = document.getElementById('class-roster-tooltip');
+            tooltip.innerHTML = `
+                <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Students in this class (${names.length})</div>
+                <ul class="space-y-0.5">${names.map(n => `<li class="text-xs text-gray-800">${escapeHtml(n)}</li>`).join('')}</ul>
+            `;
+
+            const rect = block.getBoundingClientRect();
+            tooltip.classList.remove('hidden');
+            const tooltipRect = tooltip.getBoundingClientRect();
+            const left = Math.min(rect.left, window.innerWidth - tooltipRect.width - 12);
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const top = spaceBelow >= tooltipRect.height + 10
+                ? rect.bottom + 6
+                : Math.max(8, rect.top - tooltipRect.height - 6);
+            tooltip.style.left = Math.max(8, left) + 'px';
+            tooltip.style.top = top + 'px';
+        }
+
+        function hideClassRosterTooltip() {
+            document.getElementById('class-roster-tooltip').classList.add('hidden');
         }
 
         function extractRequiredSkills(className) {
