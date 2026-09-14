@@ -100,6 +100,50 @@
             border-right: 1px solid #e5e7eb;
         }
 
+        /* Compare View: compact, read-only mini-grids shown several at a time
+           side by side (see #compare-modal / renderCompareColumnHtml). */
+        .compare-column {
+            width: 210px;
+        }
+        .compare-column-title {
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: #1f2937;
+            margin-bottom: 0.375rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .compare-table {
+            border-collapse: collapse;
+            width: 100%;
+            table-layout: fixed;
+        }
+        .compare-table th {
+            font-size: 0.625rem;
+            font-weight: 600;
+            color: #6b7280;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            padding: 2px;
+        }
+        .compare-time-label {
+            font-size: 0.625rem;
+            color: #6b7280;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            padding: 2px 4px;
+            white-space: nowrap;
+        }
+        .compare-cell {
+            font-size: 0.625rem;
+            border: 1px solid #e5e7eb;
+            padding: 2px 3px;
+            vertical-align: top;
+            min-height: 34px;
+            word-break: break-word;
+        }
+
         /* Drag and Drop specific styles */
         .draggable-class {
             cursor: grab;
@@ -356,6 +400,11 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                 </button>
+                <button onclick="openCompareModal()" title="Compare View — line multiple timetables up side by side" class="p-2.5 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 4v16M4 6a2 2 0 012-2h3v16H6a2 2 0 01-2-2V6zm11-2h3a2 2 0 012 2v12a2 2 0 01-2 2h-3V4z" />
+                    </svg>
+                </button>
             </div>
 
             <div class="w-px h-6 bg-gray-200 mx-1"></div>
@@ -412,6 +461,16 @@
                     <button type="button" class="day-filter-btn bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-md transition-colors" data-day-value="Thu" onclick="setDayFilter('Thu')">Thu</button>
                     <button type="button" class="day-filter-btn bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-md transition-colors" data-day-value="Fri" onclick="setDayFilter('Fri')">Fri</button>
                 </div>
+
+                <!-- Shown once a student is selected: opens the read-oriented Student
+                     Timetable modal below, so it's easy to see (and fix) which TA is
+                     with them each period without hunting through every TA's grid. -->
+                <button type="button" id="view-student-timetable-btn" onclick="openStudentTimetableModal(currentStudentId)" class="hidden mt-2 w-full flex items-center justify-center gap-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-md text-xs font-medium transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    View Full Student Timetable
+                </button>
             </div>
 
             <!-- List of draggable items -->
@@ -798,6 +857,101 @@
                     <button onclick="cancelDataSetup()" class="px-4 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
                     <button onclick="applyDataChanges()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">Apply Changes</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Timetable — a read-oriented view of one student's whole week, with
+         who (if anyone) is currently with them each period. Clicking a period opens
+         the Assign TA modal below to change it. -->
+    <div id="student-timetable-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
+                <h3 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span id="student-modal-title">Student Timetable</span>
+                </h3>
+                <button onclick="closeStudentTimetableModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 pt-4 flex items-center justify-between shrink-0">
+                <p class="text-xs text-gray-500">Click a period to assign or change which TA is with this student.</p>
+                <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg">
+                    <button id="student-modal-week-a" onclick="setStudentModalWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">Week A</button>
+                    <button id="student-modal-week-b" onclick="setStudentModalWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">Week B</button>
+                </div>
+            </div>
+            <div class="p-6 overflow-auto">
+                <div id="student-modal-grid-wrapper" class="w-full"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assign / change which TA is with a student for one period — opened from a
+         click inside the Student Timetable modal above. Stacks on top of it
+         (higher z-index), deliberately kept separate from the Find Cover modal's
+         own state (coverModalMode etc.) since this is a direct reassignment, not
+         a cover-for-an-absence flow. -->
+    <div id="assign-ta-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-60 z-[60] flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Assign TA
+                </h3>
+                <button onclick="closeAssignTaModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <div class="text-sm mb-3">
+                    <div id="assign-ta-class-name" class="font-medium text-gray-800"></div>
+                    <div id="assign-ta-class-time" class="text-xs text-gray-500 mt-0.5"></div>
+                    <div id="assign-ta-current" class="text-xs mt-1 text-gray-600"></div>
+                </div>
+                <div id="assign-ta-list" class="space-y-2 max-h-72 overflow-y-auto pr-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compare View — several timetables (TAs and/or the currently-selected
+         student) rendered read-only, side by side, so they can be cross-checked
+         visually the way spreading paper printouts out on a desk would let you,
+         without flipping back and forth between single views. -->
+    <div id="compare-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-[96vw] overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
+                <h3 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 4v16M4 6a2 2 0 012-2h3v16H6a2 2 0 01-2-2V6zm11-2h3a2 2 0 012 2v12a2 2 0 01-2 2h-3V4z" />
+                    </svg>
+                    Compare View
+                </h3>
+                <button onclick="closeCompareModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3 shrink-0 bg-gray-50">
+                <div class="flex items-center gap-1 bg-gray-200 p-1 rounded-lg shrink-0">
+                    <button id="compare-week-a" onclick="setCompareWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">Week A</button>
+                    <button id="compare-week-b" onclick="setCompareWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">Week B</button>
+                </div>
+                <div class="text-xs text-gray-500 shrink-0">Line up:</div>
+                <div id="compare-picker-list" class="flex flex-wrap gap-1.5 flex-1"></div>
+            </div>
+            <div class="p-6 overflow-auto flex-1">
+                <div id="compare-grid-wrapper" class="flex gap-4 items-start"></div>
             </div>
         </div>
     </div>
@@ -2394,6 +2548,106 @@
             });
         }
 
+        // ---- Student ↔ TA cross-reference, used by the Student Timetable modal
+        // (view a student's whole week and see who's with them each period) and
+        // Compare View below, so a period can be reassigned directly from the
+        // student's side instead of hunting for the right TA to drag it onto. ----
+
+        // Returns { ta, covering } for whichever TA currently has this student's
+        // period on their timetable, or null if nobody does. A covered period
+        // legitimately shows up on TWO TAs at once — the absent TA's now-covered
+        // original, and the covering TA's added entry, since the cover entry
+        // copies the original's classData — `covering: true` marks the one
+        // actually with the student right now.
+        function findTaForStudentPeriod(studentId, week, day, period) {
+            let fallback = null;
+            for (const ta of taDatabase) {
+                const entry = ta.timetables[week] && ta.timetables[week][day] && ta.timetables[week][day][period];
+                if (!entry || !entry.classData) continue;
+                let cd;
+                try { cd = JSON.parse(entry.classData); } catch (e) { continue; }
+                if (cd.studentId !== studentId) continue;
+                const covering = !!(entry.html && entry.html.includes('data-cover-origin'));
+                if (covering) return { ta, covering: true };
+                if (!fallback) fallback = { ta, covering: false };
+            }
+            return fallback;
+        }
+
+        // Clears one TA's placed entry for a slot, first cleaning up any linked
+        // cover entry on the other side (the same rule cancelPlacement follows)
+        // so reassigning a covered period doesn't leave the other half orphaned.
+        function clearTaSlot(ta, week, day, period) {
+            const entry = ta.timetables[week] && ta.timetables[week][day] && ta.timetables[week][day][period];
+            if (!entry) return;
+            const tmp = document.createElement('div');
+            tmp.innerHTML = entry.html;
+            const el = tmp.firstElementChild;
+            if (el && el.dataset.coverRef) {
+                try { clearLinkedCoverBlock(JSON.parse(el.dataset.coverRef)); } catch (e) {}
+            }
+            if (el && el.dataset.coverOrigin) {
+                try { clearLinkedCoverBlock(JSON.parse(decodeURIComponent(el.dataset.coverOrigin))); } catch (e) {}
+            }
+            delete ta.timetables[week][day][period];
+            if (ta.id === currentActiveTA) {
+                const liveCell = document.querySelector(
+                    `.timetable-cell.drop-zone[data-week="${week}"][data-day="${day}"][data-period="${period}"]`
+                );
+                if (liveCell) {
+                    liveCell.innerHTML = emptyCellContent(liveCell);
+                    liveCell.classList.add('empty');
+                }
+            }
+        }
+
+        // Moves one period of a student's schedule onto a specific TA's timetable
+        // (or clears it entirely if newTaId is falsy) — the engine behind the
+        // Student Timetable modal's Assign/Change TA action. Removes it from
+        // wherever it currently sits first (cleaning up any linked cover entry),
+        // then places a fresh copy exactly as dragging the sidebar card there
+        // would, so Find Cover, right-click cancel, and Undo all keep working on
+        // it afterwards.
+        function moveStudentPeriodToTA(studentId, week, day, period, newTaId) {
+            const student = studentTimetables.find(s => s.id === studentId);
+            const cell = student && student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
+            if (!cell || !cell.code) return;
+
+            pushUndoSnapshot();
+
+            const current = findTaForStudentPeriod(studentId, week, day, period);
+            if (current) clearTaSlot(current.ta, week, day, period);
+
+            if (newTaId) {
+                const targetTA = taDatabase.find(t => t.id === newTaId);
+                if (targetTA) {
+                    const cd = {
+                        title: cell.code, teacher: cell.teacher, room: cell.room, duration: 1,
+                        skills: [], day: day, period: period, week: week,
+                        student: student.name, studentId: student.id
+                    };
+                    if (!targetTA.timetables[week][day]) targetTA.timetables[week][day] = {};
+                    targetTA.timetables[week][day][period] = {
+                        html: buildAssignedBlockHtml(cd),
+                        classData: JSON.stringify(cd)
+                    };
+                    if (targetTA.id === currentActiveTA) {
+                        const liveCell = document.querySelector(
+                            `.timetable-cell.drop-zone[data-week="${week}"][data-day="${day}"][data-period="${period}"]`
+                        );
+                        if (liveCell) {
+                            liveCell.innerHTML = targetTA.timetables[week][day][period].html;
+                            liveCell.classList.remove('empty');
+                            initCoverButtons();
+                        }
+                    }
+                }
+            }
+
+            if (currentStudentId === studentId) loadStudentPeriods(studentId); // keep sidebar cards in sync
+            saveStateToStorage();
+        }
+
         // Walk every TA's saved timetable, applying `updater(classData)` (returns
         // the new classData) to every entry matching `predicate` — the shared
         // engine behind the real-time Data Setup → card sync below.
@@ -3637,6 +3891,8 @@
             if (searchInput) searchInput.value = '';
             const dayFilterRow = document.getElementById('day-filter-row');
             if (dayFilterRow) dayFilterRow.classList.add('hidden');
+            const viewStudentBtn = document.getElementById('view-student-timetable-btn');
+            if (viewStudentBtn) viewStudentBtn.classList.add('hidden');
             setDayFilter('all'); // Class Needs mode doesn't keep a day restriction from a previous student
         }
 
@@ -4013,6 +4269,8 @@
             highZone.innerHTML = '';
             standardZone.innerHTML = '';
             if (dayFilterRow) dayFilterRow.classList.remove('hidden');
+            const viewStudentBtn = document.getElementById('view-student-timetable-btn');
+            if (viewStudentBtn) viewStudentBtn.classList.remove('hidden');
             if (isNewStudent) setDayFilter('all'); // don't carry a stale day filter over from a previous student
 
             ['A', 'B'].forEach(week => {
@@ -4029,6 +4287,276 @@
 
             initCoverButtons();
             reapplyClassFilter();
+        }
+
+        // ---- Student Timetable modal: a read-oriented view of one student's
+        // whole week (both weeks, via its own tab toggle) showing which TA, if
+        // any, is with them each period — separate from the drag-and-drop
+        // sidebar cards above, so checking (and fixing) a student's coverage
+        // doesn't mean hunting through every TA's grid one at a time. ----
+
+        let studentModalWeek = 'A';
+        let studentModalStudentId = null;
+
+        function openStudentTimetableModal(studentId) {
+            if (!studentId) return;
+            const student = studentTimetables.find(s => s.id === studentId);
+            if (!student) return;
+            studentModalStudentId = studentId;
+            studentModalWeek = 'A';
+            document.getElementById('student-modal-title').textContent =
+                student.name + (student.yearGroup ? ' (' + student.yearGroup + ')' : '') + '’s Timetable';
+            updateStudentModalWeekButtons();
+            renderStudentModalGrid();
+            document.getElementById('student-timetable-modal').classList.remove('hidden');
+        }
+
+        function closeStudentTimetableModal() {
+            document.getElementById('student-timetable-modal').classList.add('hidden');
+            studentModalStudentId = null;
+        }
+
+        function setStudentModalWeek(week) {
+            studentModalWeek = week;
+            updateStudentModalWeekButtons();
+            renderStudentModalGrid();
+        }
+
+        function updateStudentModalWeekButtons() {
+            const btnA = document.getElementById('student-modal-week-a');
+            const btnB = document.getElementById('student-modal-week-b');
+            [[btnA, 'A'], [btnB, 'B']].forEach(([btn, w]) => {
+                const active = studentModalWeek === w;
+                btn.classList.toggle('active', active);
+                btn.classList.toggle('bg-white', active);
+                btn.classList.toggle('shadow', active);
+                btn.classList.toggle('text-gray-600', !active);
+            });
+        }
+
+        function renderStudentModalGrid() {
+            const student = studentTimetables.find(s => s.id === studentModalStudentId);
+            const wrapper = document.getElementById('student-modal-grid-wrapper');
+            if (!student || !wrapper) return;
+            const week = studentModalWeek;
+
+            let html = `<div class="timetable-grid">
+                <div class="timetable-header time-label">Time</div>
+                ${DAY_OPTIONS.map(d => `<div class="timetable-header">${d}</div>`).join('')}`;
+
+            PERIOD_OPTIONS.forEach(period => {
+                const timeLabel = PERIOD_TIME_LABELS[period] || '';
+                html += `<div class="time-label"><span class="font-bold text-gray-700">Period ${escapeHtml(period)}</span><span>${escapeHtml(timeLabel)}</span></div>`;
+                DAY_OPTIONS.forEach(day => {
+                    const cell = student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
+                    if (!cell || !cell.code) {
+                        html += `<div class="timetable-cell empty"></div>`;
+                        return;
+                    }
+                    const taMatch = findTaForStudentPeriod(student.id, week, day, period);
+                    const badge = taMatch
+                        ? `<div class="text-[10px] mt-1 px-1.5 py-0.5 inline-block rounded ${taMatch.covering ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}">👤 ${escapeHtml(taMatch.ta.name)}${taMatch.covering ? ' (cover)' : ''}</div>`
+                        : `<div class="text-[10px] mt-1 px-1.5 py-0.5 inline-block rounded bg-gray-100 text-gray-500">Unassigned</div>`;
+                    html += `<div class="timetable-cell cursor-pointer hover:bg-blue-50 transition-colors" onclick="openAssignTaForStudentPeriod('${student.id}','${week}','${day}','${period}')">
+                        <span class="class-title">${escapeHtml(cell.code)}</span>
+                        <div class="class-detail mt-1 flex justify-between"><span>${escapeHtml(cell.teacher || '')}</span><span>${escapeHtml(cell.room || '')}</span></div>
+                        ${badge}
+                    </div>`;
+                });
+            });
+
+            html += `</div>`;
+            wrapper.innerHTML = html;
+        }
+
+        // ---- Assign TA modal: opened from a click inside the Student Timetable
+        // modal above. Lists every TA free at that exact slot (plus whoever
+        // already holds it, so it can be kept or explicitly removed) — kept
+        // deliberately separate from the Find Cover modal's own state
+        // (coverModalMode, currentCoverBlock) since this is a direct
+        // reassignment, not a cover-for-an-absence flow. ----
+
+        let assignTaContext = null; // { studentId, week, day, period }
+
+        function openAssignTaForStudentPeriod(studentId, week, day, period) {
+            const student = studentTimetables.find(s => s.id === studentId);
+            const cell = student && student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
+            if (!cell || !cell.code) return;
+            assignTaContext = { studentId, week, day, period };
+
+            document.getElementById('assign-ta-class-name').textContent = cell.code;
+            document.getElementById('assign-ta-class-time').textContent = `Week ${week}, ${day}, Period ${period}`;
+
+            const current = findTaForStudentPeriod(studentId, week, day, period);
+            document.getElementById('assign-ta-current').textContent = current
+                ? `Currently with: ${current.ta.name}${current.covering ? ' (covering)' : ''}`
+                : 'Currently unassigned';
+
+            const freeTAs = taDatabase.filter(ta => {
+                const busy = ta.timetables[week] && ta.timetables[week][day] && ta.timetables[week][day][period];
+                return !busy || (current && current.ta.id === ta.id);
+            });
+
+            let listHtml = freeTAs.map(ta => `
+                <div class="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+                    <div class="font-medium text-gray-800 text-sm">${escapeHtml(ta.name)}</div>
+                    <button onclick="confirmAssignTaForStudentPeriod('${ta.id}')" class="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 px-3 py-1.5 rounded-md text-xs font-medium transition-colors">
+                        ${current && current.ta.id === ta.id ? 'Keep' : 'Assign'}
+                    </button>
+                </div>
+            `).join('');
+
+            if (current) {
+                listHtml += `
+                    <div class="flex justify-between items-center p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div class="text-sm text-red-700">Remove from ${escapeHtml(current.ta.name)}</div>
+                        <button onclick="confirmAssignTaForStudentPeriod(null)" class="bg-white text-red-600 hover:bg-red-600 hover:text-white border border-red-300 px-3 py-1.5 rounded-md text-xs font-medium transition-colors">Unassign</button>
+                    </div>
+                `;
+            }
+
+            document.getElementById('assign-ta-list').innerHTML = listHtml ||
+                '<div class="text-sm text-gray-400 italic p-4 text-center">No TA is free at this slot.</div>';
+            document.getElementById('assign-ta-modal').classList.remove('hidden');
+        }
+
+        function closeAssignTaModal() {
+            document.getElementById('assign-ta-modal').classList.add('hidden');
+            assignTaContext = null;
+        }
+
+        function confirmAssignTaForStudentPeriod(newTaId) {
+            if (!assignTaContext) return;
+            const { studentId, week, day, period } = assignTaContext;
+            moveStudentPeriodToTA(studentId, week, day, period, newTaId);
+            closeAssignTaModal();
+            renderStudentModalGrid(); // reflect the change in the still-open Student Timetable modal
+        }
+
+        // ---- Compare View: several timetables (TAs and/or the currently
+        // selected student) rendered read-only, side by side, so they can be
+        // cross-checked visually the way spreading paper printouts across a
+        // desk would, instead of flipping between single views one at a time. ----
+
+        let compareSelection = new Set();
+        let compareWeek = 'A';
+
+        function openCompareModal() {
+            if (compareSelection.size === 0) {
+                // Sensible default so the view isn't empty the first time it opens.
+                if (currentActiveTA) compareSelection.add('ta:' + currentActiveTA);
+                if (currentStudentId) compareSelection.add('student:' + currentStudentId);
+            }
+            renderComparePicker();
+            renderCompareGrid();
+            document.getElementById('compare-modal').classList.remove('hidden');
+        }
+
+        function closeCompareModal() {
+            document.getElementById('compare-modal').classList.add('hidden');
+        }
+
+        function setCompareWeek(week) {
+            compareWeek = week;
+            const btnA = document.getElementById('compare-week-a');
+            const btnB = document.getElementById('compare-week-b');
+            [[btnA, 'A'], [btnB, 'B']].forEach(([btn, w]) => {
+                const active = compareWeek === w;
+                btn.classList.toggle('active', active);
+                btn.classList.toggle('bg-white', active);
+                btn.classList.toggle('shadow', active);
+                btn.classList.toggle('text-gray-600', !active);
+            });
+            renderCompareGrid();
+        }
+
+        function toggleCompareSelection(key) {
+            if (compareSelection.has(key)) compareSelection.delete(key); else compareSelection.add(key);
+            renderComparePicker();
+            renderCompareGrid();
+        }
+
+        function renderComparePicker() {
+            const list = document.getElementById('compare-picker-list');
+            let html = taDatabase.map(ta => {
+                const key = 'ta:' + ta.id;
+                const active = compareSelection.has(key);
+                return `<button type="button" onclick="toggleCompareSelection('${key}')" class="text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${escapeHtml(ta.name)}</button>`;
+            }).join('');
+
+            if (currentStudentId) {
+                const student = studentTimetables.find(s => s.id === currentStudentId);
+                if (student) {
+                    const key = 'student:' + student.id;
+                    const active = compareSelection.has(key);
+                    html += `<button type="button" onclick="toggleCompareSelection('${key}')" class="text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-700 border-purple-300 hover:bg-purple-50'}">🎓 ${escapeHtml(student.name)}</button>`;
+                }
+            }
+            list.innerHTML = html;
+        }
+
+        function renderCompareColumnHtml(kind, id, week) {
+            let title, cellFn;
+            if (kind === 'ta') {
+                const ta = taDatabase.find(t => t.id === id);
+                if (!ta) return '';
+                title = ta.name;
+                cellFn = (day, period) => {
+                    const entry = ta.timetables[week] && ta.timetables[week][day] && ta.timetables[week][day][period];
+                    if (!entry) return '';
+                    let cd = {};
+                    try { cd = JSON.parse(entry.classData || '{}'); } catch (e) {}
+                    return cd.title ? escapeHtml(cd.title) : '';
+                };
+            } else {
+                const student = studentTimetables.find(s => s.id === id);
+                if (!student) return '';
+                title = '🎓 ' + student.name;
+                cellFn = (day, period) => {
+                    const cell = student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
+                    if (!cell || !cell.code) return '';
+                    const taMatch = findTaForStudentPeriod(id, week, day, period);
+                    const taLabel = taMatch
+                        ? `<div class="text-indigo-600 mt-0.5">👤${escapeHtml(taMatch.ta.name)}</div>`
+                        : `<div class="text-red-400 mt-0.5">unassigned</div>`;
+                    return `${escapeHtml(cell.code)}${taLabel}`;
+                };
+            }
+
+            let rows = '';
+            PERIOD_OPTIONS.forEach(period => {
+                rows += `<tr><td class="compare-time-label">P${escapeHtml(period)}</td>`;
+                DAY_OPTIONS.forEach(day => {
+                    rows += `<td class="compare-cell">${cellFn(day, period)}</td>`;
+                });
+                rows += `</tr>`;
+            });
+
+            return `
+                <div class="compare-column shrink-0">
+                    <div class="compare-column-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+                    <table class="compare-table">
+                        <thead><tr><th></th>${DAY_OPTIONS.map(d => `<th>${d}</th>`).join('')}</tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function renderCompareGrid() {
+            const wrapper = document.getElementById('compare-grid-wrapper');
+            if (compareSelection.size === 0) {
+                wrapper.innerHTML = '<div class="text-sm text-gray-400 italic p-6">Pick at least one TA or student above to compare.</div>';
+                return;
+            }
+            let html = '';
+            compareSelection.forEach(key => {
+                const sep = key.indexOf(':');
+                const kind = key.slice(0, sep);
+                const id = key.slice(sep + 1);
+                html += renderCompareColumnHtml(kind, id, compareWeek);
+            });
+            wrapper.innerHTML = html;
         }
     </script>
 </body>
