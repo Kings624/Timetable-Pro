@@ -541,6 +541,71 @@
             color: #E8879B;
         }
 
+        /* Dark mode for her theme specifically — a warm "night desk" palette,
+           not a plain inversion. Scoped to only what her theme already touches
+           (her grid's colors, the paper background, her sign-off) since the
+           rest of this app has no dark mode anywhere else — the nav, sidebar
+           and every other TA's view stay light regardless. So this only ever
+           kicks in for her, and only where she already has custom styling;
+           it doesn't attempt to half-theme chrome that has no dark treatment
+           to begin with. */
+        @media (prefers-color-scheme: dark) {
+            .janice-theme .main-panel {
+                background:
+                    radial-gradient(#3a2a3a 1.5px, transparent 2px) 0 0/20px 20px,
+                    #241a25;
+            }
+            .janice-theme #timetable-body-a .class-block {
+                background-color: #47303A;
+                border-color: #6b4450;
+                border-left-color: #F0A0B2;
+            }
+            .janice-theme #timetable-body-b .class-block {
+                background-color: #3A2E4D;
+                border-color: #584a6e;
+                border-left-color: #C8B4E8;
+            }
+            .janice-theme #timetable-body-a .time-label,
+            .janice-theme .week-a-active .timetable-header {
+                background-color: #47303A;
+                border-color: #6b4450;
+                color: #F5E9EC;
+            }
+            .janice-theme #timetable-body-b .time-label,
+            .janice-theme .week-b-active .timetable-header {
+                background-color: #3A2E4D;
+                border-color: #584a6e;
+                color: #F5E9EC;
+            }
+            /* The "Period N" span inside each time-label carries its own
+               text-gray-700 utility class, which (being set directly on that
+               element) wins over inheriting color from .time-label no matter
+               how specific that rule is — so it needs its own override here,
+               or "Period 1" etc. render as barely-legible dark-on-dark. */
+            .janice-theme #timetable-body-a .time-label *,
+            .janice-theme .week-a-active .timetable-header * {
+                color: #F5E9EC;
+            }
+            .janice-theme #timetable-body-b .time-label *,
+            .janice-theme .week-b-active .timetable-header * {
+                color: #F5E9EC;
+            }
+            .janice-theme #timetable-body-a .class-block .class-title,
+            .janice-theme #timetable-body-b .class-block .class-title {
+                color: #F5E9EC;
+            }
+            .janice-theme #timetable-body-a .class-block .class-detail,
+            .janice-theme #timetable-body-b .class-block .class-detail {
+                color: #C6AFC0;
+            }
+            .janice-theme .class-block::after {
+                background: #3a2a3a;
+            }
+            #janice-signoff {
+                color: #F0A0B2;
+            }
+        }
+
         /* Confetti burst for the "🎉" cheer button — plain divs, no canvas/lib
            needed. Pieces are fixed + pointer-events:none, so none of this
            can ever sit between a click and whatever's underneath it. */
@@ -4507,6 +4572,33 @@
                     block._rosterHoverBound = true;
                     block.addEventListener('mouseenter', () => showClassRosterTooltip(block));
                     block.addEventListener('mouseleave', hideClassRosterTooltip);
+                }
+
+                // Moving/swapping a placed class by dragging it to another slot.
+                // Every already-placed block is created with its own dragstart/
+                // dragend listeners at the moment it's dropped into the grid —
+                // but saveCurrentTimetableState stores block.outerHTML as a
+                // plain string, and loadTimetableForActiveTA re-renders from
+                // that string via innerHTML on every TA switch, undo/redo, and
+                // page load. innerHTML never carries JS listeners with it, only
+                // markup — so the `draggable="true"` attribute survives (the
+                // block can still be picked up) but nothing was left to call
+                // dataTransfer.setData(...) on drop, so the drop silently did
+                // nothing. Same JS-property-guard pattern as above rebinds it
+                // on every fresh node without double-binding an already-live
+                // one — and only for blocks already marked draggable, since a
+                // Cover entry's markup deliberately leaves that attribute off
+                // (it's managed by right-click cancel, not drag).
+                if (block.draggable && !block._dragBound) {
+                    block._dragBound = true;
+                    block.addEventListener('dragstart', (e) => {
+                        block.classList.add('is-dragging');
+                        e.dataTransfer.setData('text/plain', block.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+                    block.addEventListener('dragend', () => {
+                        block.classList.remove('is-dragging');
+                    });
                 }
 
                 // Always replace the Find Cover button rather than reusing one found in the
