@@ -496,22 +496,25 @@
             transform: rotate(-2.5deg);
             z-index: -1;
         }
-        /* Little-Prince-style paper texture, one motif per week: a tiny rose
-           for Week A, a tiny crown for Week B — plain inline SVGs tiled as a
-           background-image (no external asset files), each drawn in a very
-           pale tint of that week's accent color so it reads as texture, not
+        /* Little-Prince-style paper texture, one motif per week: real 🌹 for
+           Week A, real 👑 for Week B — an earlier hand-drawn line-art
+           version of these looked rough, so this tiles the actual emoji
+           glyphs instead (as SVG <text>, so they can still go in a
+           background-image data URI with no external asset files), two per
+           tile at different sizes/rotations for a scattered rather than
+           grid-y feel, faded down with opacity so it reads as texture, not
            clutter. toggleWeek()/applyJaniceTheme() mirror the active week
            onto .main-panel as .week-b-active-panel (it has no ancestor in
            common with the header row's own week-active class to hang a
            single selector off of). */
         .janice-theme .main-panel {
             background:
-                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg fill='none' stroke='%23f0c9d4' stroke-width='1.3' stroke-linecap='round'%3E%3Ccircle cx='20' cy='15' r='4.5'/%3E%3Cpath d='M20 19 Q17 23 14.5 21.5 Q15.5 25.5 18.5 27'/%3E%3Cpath d='M20 19 Q23 23 25.5 21.5 Q24.5 25.5 21.5 27'/%3E%3Cpath d='M20 10.5 Q17 8 14.5 9.5'/%3E%3Cpath d='M20 10.5 Q23 8 25.5 9.5'/%3E%3C/g%3E%3C/svg%3E") 0 0/48px 48px repeat,
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Ctext x='8' y='26' font-size='17' opacity='0.28' transform='rotate(-10 8 26)'%3E%F0%9F%8C%B9%3C/text%3E%3Ctext x='38' y='52' font-size='13' opacity='0.18' transform='rotate(12 38 52)'%3E%F0%9F%8C%B9%3C/text%3E%3C/svg%3E") 0 0/60px 60px repeat,
                 #fdf7f2;
         }
         .janice-theme .main-panel.week-b-active-panel {
             background:
-                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg fill='none' stroke='%23a9d6ee' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 25 L13.5 15 L18 20.5 L20 12 L22 20.5 L26.5 15 L28 25 Z'/%3E%3Cline x1='12' y1='25' x2='28' y2='25'/%3E%3C/g%3E%3C/svg%3E") 0 0/48px 48px repeat,
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Ctext x='9' y='24' font-size='17' opacity='0.28' transform='rotate(-8 9 24)'%3E%F0%9F%91%91%3C/text%3E%3Ctext x='39' y='50' font-size='13' opacity='0.18' transform='rotate(10 39 50)'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E") 0 0/60px 60px repeat,
                 #f4fbfe;
         }
 
