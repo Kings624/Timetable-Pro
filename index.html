@@ -824,7 +824,6 @@
                 <span id="janice-flair" class="hidden items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full">🌷 Boss Mode</span>
                 <button id="janice-notes-btn" onclick="toggleJaniceNotes()" title="Your private notes — only shown in your own view" class="hidden items-center justify-center w-7 h-7 rounded-full text-sm hover:bg-pink-100 transition-colors">📝</button>
                 <button id="janice-cheer-btn" onclick="fireJaniceCheer()" title="Treat yourself" class="hidden items-center justify-center w-7 h-7 rounded-full text-sm hover:bg-pink-100 transition-colors">🎉</button>
-                <button id="janice-assistant-btn" onclick="toggleJaniceAssistant()" title="Draft assistant — helps write emails/messages, nothing is saved" class="hidden items-center justify-center w-7 h-7 rounded-full text-sm hover:bg-pink-100 transition-colors">💌</button>
             </div>
 
             <div class="w-px h-6 bg-gray-200 mx-1"></div>
@@ -928,25 +927,6 @@
         </div>
 
         <p class="text-[10px] text-gray-400 mt-2">Only shown in your own view — heads up though, it's saved in the same shared file as everything else, not a truly private/encrypted note.</p>
-    </div>
-
-    <!-- Janice's draft assistant — same visibility rule as the notes panel
-         above. Uses the Artifact platform's built-in "ask Claude" capability
-         (window.claude.use('sample')) instead of an embedded API key, so it
-         only works when this page is opened through a Claude.ai artifact
-         link — see initJaniceAssistant. Chat history lives in the plain JS
-         array janiceAssistantTurns only: never written to ta.*, never
-         touched by saveCurrentTimetableState/pushUndoSnapshot, gone on
-         reload — nothing here is saved anywhere. -->
-    <div id="janice-assistant-panel" class="hidden fixed z-40 w-80 bg-white border-2 border-pink-200 rounded-2xl shadow-xl flex flex-col" style="left: calc(100vw - 352px); top: calc(100vh - 520px); height: 480px;">
-        <div id="janice-assistant-header" class="flex justify-between items-center px-4 py-3 border-b border-pink-100 cursor-move select-none shrink-0" title="Drag to move">
-            <span class="text-sm font-semibold text-pink-700 flex items-center gap-1" style="font-family:'Fredoka','Poppins',sans-serif;">💌 Draft Assistant <span class="text-[10px] text-pink-300 font-normal">⠿ drag me</span></span>
-            <button onclick="toggleJaniceAssistant()" class="text-gray-400 hover:text-gray-600 text-sm leading-none">✕</button>
-        </div>
-        <div id="janice-assistant-body" class="flex-1 min-h-0 flex flex-col">
-            <!-- Populated by initJaniceAssistant(): either the chat UI or an
-                 explanation when this view can't reach Claude. -->
-        </div>
     </div>
 
     <!-- Main Content Area -->
@@ -3424,17 +3404,15 @@
         // running through the exact same code path as everyone else's view.
         function applyJaniceTheme(isJanice) {
             document.body.classList.toggle('janice-theme', isJanice);
-            ['janice-flair', 'janice-notes-btn', 'janice-cheer-btn', 'janice-assistant-btn', 'janice-signoff'].forEach(id => {
+            ['janice-flair', 'janice-notes-btn', 'janice-cheer-btn', 'janice-signoff'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.toggle('hidden', !isJanice);
             });
             if (!isJanice) {
-                // Don't leave her notes/assistant open hanging over someone
-                // else's screen after switching away from her.
-                ['janice-notes-panel', 'janice-assistant-panel'].forEach(id => {
-                    const panel = document.getElementById(id);
-                    if (panel) panel.classList.add('hidden');
-                });
+                // Don't leave her notes open hanging over someone else's screen
+                // after switching away from her.
+                const panel = document.getElementById('janice-notes-panel');
+                if (panel) panel.classList.add('hidden');
             }
             // Sync the paper texture (rose vs. crown, see .main-panel.week-b-
             // active-panel) to whichever week is already showing — toggleWeek()
@@ -3469,14 +3447,14 @@
             ta.privateNotes = value; // rides along in the normal save/undo snapshots, no extra wiring needed
         }
 
-        // Drag-to-move for a floating panel — mousedown on its header starts
+        // Drag-to-move for the notes panel — mousedown on its header starts
         // tracking, mousemove repositions it via left/top (clamped to stay
-        // fully on-screen), mouseup stops. Bound once at load per panel; each
-        // is a single static element (never recreated), so this never needs
-        // rebinding the way per-block listeners elsewhere in the app do.
-        function makeJanicePanelDraggable(panelId, handleId) {
-            const panel = document.getElementById(panelId);
-            const handle = document.getElementById(handleId);
+        // fully on-screen), mouseup stops. Bound once at load; the panel
+        // itself is a single static element (never recreated), so this never
+        // needs rebinding the way per-block listeners elsewhere in the app do.
+        function makeJanicePanelDraggable() {
+            const panel = document.getElementById('janice-notes-panel');
+            const handle = document.getElementById('janice-notes-header');
             if (!panel || !handle) return;
             let dragging = false, offsetX = 0, offsetY = 0;
 
@@ -3541,238 +3519,6 @@
         function removeJaniceChecklistItem(idx) {
             getJaniceChecklist().splice(idx, 1);
             renderJaniceChecklist();
-        }
-
-        // ---- Draft assistant — prototyped in a standalone sandbox artifact
-        // first (see the session for that link). Uses the Artifact
-        // platform's own "ask Claude" capability (window.claude.use
-        // ('sample')) rather than an embedded API key, which only exists
-        // when this page is opened through its Claude.ai artifact link —
-        // NOT when opened as a plain file or via GitHub Pages, where
-        // window.claude is simply undefined. Detected at runtime; when
-        // absent the panel explains that plainly instead of failing
-        // silently. Chat history (janiceAssistantTurns) is a plain JS array,
-        // never written onto any ta.* field, so it's automatically outside
-        // saveCurrentTimetableState/pushUndoSnapshot/cloud sync — gone on
-        // reload, exactly like it was in the prototype. ----
-
-        const JANICE_ASSISTANT_STYLE_GUIDE = "You are a warm, concise drafting assistant for Janice, who coordinates teaching assistants at a UK secondary school. " +
-            "When asked to write something, produce ONE ready-to-send draft (email or short message as appropriate) in a warm but professional tone, " +
-            "using UK conventions (e.g. 'Dear ...', 'Kind regards'). Keep it concise — a few short paragraphs at most. " +
-            "If specific names, dates or details aren't given, use clearly-marked placeholders like [Student Name] or [Date] rather than inventing real-sounding ones. " +
-            "Reply with ONLY the draft text — no preamble like 'Here's a draft:', no notes afterwards.";
-
-        const JANICE_ASSISTANT_CHIPS = [
-            { label: 'Reply to a parent', prompt: "Write a reply to a parent explaining their child was a bit unsettled in class today, but reassure them it's being handled kindly." },
-            { label: 'Ask for cover', prompt: 'Write a short message to a colleague TA asking if they can cover my Thursday period 3 duty next week.' },
-            { label: 'Thank a volunteer', prompt: 'Write a thank-you note to a parent volunteer who helped out on the school trip.' },
-            { label: 'Request time off', prompt: 'Write a polite note to the office requesting Friday afternoon off for a dentist appointment.' }
-        ];
-
-        // Grouped exactly as the sample() contract documents: hide-the-
-        // feature codes vs. tell-the-viewer-and-let-them-retry codes.
-        const JANICE_ASSISTANT_ERROR_COPY = {
-            not_granted: "AI drafting isn't turned on for this view.",
-            sampling_disabled: "AI drafting isn't available for this account.",
-            not_declared: "This view isn't set up for AI drafting.",
-            capability_disabled: "AI drafting isn't available right now.",
-            capability_removed: "AI drafting isn't available in this viewer.",
-            rate_limited: "Too many requests just now — try again in a moment.",
-            session_expired: "Please sign in again to keep using this.",
-            refused: "That request couldn't be drafted — try rephrasing it.",
-            empty_completion: "Didn't get a draft back — try asking for something shorter or different.",
-            upstream_error: "Something went wrong reaching Claude — try again.",
-            invalid_request: "That didn't go through — try rephrasing your request.",
-            prompt_too_large: "That's a lot to work with — try a shorter description."
-        };
-        const JANICE_ASSISTANT_HIDE_CODES = new Set(['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed']);
-
-        // A leading, permanent instructions turn — consecutive user turns
-        // (this one followed by the viewer's actual first message) are
-        // explicitly fine per the sample() contract, and read as one.
-        let janiceAssistantTurns = [{ role: 'user', content: JANICE_ASSISTANT_STYLE_GUIDE }];
-        let janiceAssistantSample = null;
-        let janiceAssistantSampleChecked = false;
-        let janiceAssistantController = null;
-        let janiceAssistantInitialized = false;
-
-        function toggleJaniceAssistant() {
-            const panel = document.getElementById('janice-assistant-panel');
-            if (!panel) return;
-            const opening = panel.classList.contains('hidden');
-            panel.classList.toggle('hidden');
-            if (opening && !janiceAssistantInitialized) {
-                janiceAssistantInitialized = true;
-                initJaniceAssistant();
-            }
-        }
-
-        async function getJaniceAssistantSample() {
-            if (!janiceAssistantSampleChecked) {
-                janiceAssistantSampleChecked = true;
-                try {
-                    janiceAssistantSample = (window.claude && typeof window.claude.use === 'function')
-                        ? await window.claude.use('sample')
-                        : null;
-                } catch (e) {
-                    janiceAssistantSample = null;
-                }
-            }
-            return janiceAssistantSample;
-        }
-
-        async function initJaniceAssistant() {
-            const body = document.getElementById('janice-assistant-body');
-            if (!body) return;
-            body.innerHTML = `
-                <div class="text-[10px] text-center text-pink-400 bg-pink-50 py-1 shrink-0">✎ Drafts only — nothing here is saved, review before sending</div>
-                <div id="janice-assistant-chips" class="flex gap-1.5 px-3 py-2 overflow-x-auto shrink-0 border-b border-pink-100"></div>
-                <div id="janice-assistant-thread" class="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-2"></div>
-                <div class="flex gap-1.5 items-end px-3 py-2.5 border-t border-pink-100 shrink-0">
-                    <textarea id="janice-assistant-input" rows="1" placeholder="What do you need to write?" class="flex-1 text-xs border border-pink-100 rounded-xl px-2.5 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-pink-300 max-h-20" style="font-family:'Quicksand','Poppins',sans-serif;"></textarea>
-                    <button id="janice-assistant-send" onclick="sendJaniceAssistantMessage()" class="shrink-0 text-xs font-semibold bg-pink-500 hover:bg-pink-600 text-white rounded-xl px-3 py-2 transition-colors" style="font-family:'Fredoka','Poppins',sans-serif;">Send</button>
-                    <button id="janice-assistant-stop" onclick="stopJaniceAssistantMessage()" class="hidden shrink-0 text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-600 rounded-xl px-3 py-2 transition-colors">Stop</button>
-                </div>
-            `;
-
-            const chipsEl = document.getElementById('janice-assistant-chips');
-            chipsEl.innerHTML = JANICE_ASSISTANT_CHIPS.map(c =>
-                `<button type="button" data-prompt="${escapeHtml(c.prompt)}" class="shrink-0 text-[11px] font-medium text-pink-700 bg-pink-50 hover:bg-pink-100 rounded-full px-3 py-1.5 transition-colors">${escapeHtml(c.label)}</button>`
-            ).join('');
-            chipsEl.addEventListener('click', (e) => {
-                const chip = e.target.closest('button[data-prompt]');
-                if (chip) sendJaniceAssistantMessage(chip.dataset.prompt);
-            });
-
-            const input = document.getElementById('janice-assistant-input');
-            input.addEventListener('input', () => {
-                input.style.height = 'auto';
-                input.style.height = Math.min(80, input.scrollHeight) + 'px';
-            });
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendJaniceAssistantMessage();
-                }
-            });
-
-            addJaniceAssistantEmptyState();
-
-            // Check up front so "unavailable" shows immediately rather than
-            // only after a failed Send.
-            const sample = await getJaniceAssistantSample();
-            if (!sample) showJaniceAssistantUnavailable();
-        }
-
-        function addJaniceAssistantEmptyState() {
-            const thread = document.getElementById('janice-assistant-thread');
-            if (!thread) return;
-            thread.innerHTML = '<div class="m-auto text-center text-xs text-gray-300 max-w-[200px] leading-relaxed"><span class="text-2xl block mb-1">🌹</span>Pick a starting point above, or just type what you need below.</div>';
-        }
-
-        function addJaniceAssistantRow(role, text, opts) {
-            opts = opts || {};
-            const thread = document.getElementById('janice-assistant-thread');
-            if (!thread) return null;
-            const emptyState = thread.querySelector('.m-auto');
-            if (emptyState) emptyState.remove();
-
-            const row = document.createElement('div');
-            row.className = 'flex ' + (role === 'user' ? 'justify-end' : 'justify-start');
-            const bubble = document.createElement('div');
-            let bubbleClass = 'max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap break-words';
-            if (role === 'user') {
-                bubbleClass += ' bg-pink-500 text-white rounded-br-sm';
-            } else if (opts.error) {
-                bubbleClass += ' bg-red-50 border border-red-200 text-red-700 rounded-bl-sm';
-            } else {
-                bubbleClass += ' bg-pink-50 border border-pink-100 text-gray-700 rounded-bl-sm' + (opts.thinking ? ' italic text-gray-400' : '');
-            }
-            bubble.className = bubbleClass;
-            bubble.textContent = text;
-            row.appendChild(bubble);
-            thread.appendChild(row);
-            thread.scrollTop = thread.scrollHeight;
-            return bubble;
-        }
-
-        function showJaniceAssistantUnavailable() {
-            const body = document.getElementById('janice-assistant-body');
-            if (!body) return;
-            body.innerHTML = `
-                <div class="m-auto text-center px-6 py-8">
-                    <span class="text-3xl block mb-2">🌙</span>
-                    <div class="text-sm font-semibold text-gray-700 mb-1" style="font-family:'Fredoka','Poppins',sans-serif;">Drafting isn't available here</div>
-                    <p class="text-xs text-gray-400 leading-relaxed">This only works when the app is opened through its Claude.ai link — not this local/GitHub Pages copy.</p>
-                </div>
-            `;
-        }
-
-        async function sendJaniceAssistantMessage(presetText) {
-            const input = document.getElementById('janice-assistant-input');
-            const text = (typeof presetText === 'string' ? presetText : (input ? input.value : '')).trim();
-            if (!text) return;
-
-            const sample = await getJaniceAssistantSample();
-            if (!sample) {
-                showJaniceAssistantUnavailable();
-                return;
-            }
-
-            const sendBtn = document.getElementById('janice-assistant-send');
-            const stopBtn = document.getElementById('janice-assistant-stop');
-            if (sendBtn) { sendBtn.disabled = true; sendBtn.classList.add('hidden'); }
-            if (stopBtn) stopBtn.classList.remove('hidden');
-            if (input) { input.value = ''; input.style.height = 'auto'; }
-
-            addJaniceAssistantRow('user', text);
-            janiceAssistantTurns.push({ role: 'user', content: text });
-
-            const thinkingBubble = addJaniceAssistantRow('assistant', 'Thinking…', { thinking: true });
-            janiceAssistantController = new AbortController();
-
-            try {
-                const { text: reply } = await sample(janiceAssistantTurns, {
-                    cache: false, // a fresh answer every turn, never a replayed one
-                    signal: janiceAssistantController.signal,
-                    modelTier: 'default',
-                    onText: ({ text: whole }) => {
-                        thinkingBubble.classList.remove('italic', 'text-gray-400');
-                        thinkingBubble.textContent = whole;
-                        const thread = document.getElementById('janice-assistant-thread');
-                        if (thread) thread.scrollTop = thread.scrollHeight;
-                    }
-                });
-                thinkingBubble.classList.remove('italic', 'text-gray-400');
-                thinkingBubble.textContent = reply;
-                janiceAssistantTurns.push({ role: 'assistant', content: reply });
-            } catch (e) {
-                if (e && e.code === 'cancelled') {
-                    const partial = (e.text && e.text.trim()) || '';
-                    thinkingBubble.classList.remove('italic', 'text-gray-400');
-                    thinkingBubble.textContent = partial ? partial + '\n\n(stopped)' : '(stopped)';
-                    janiceAssistantTurns.push({ role: 'assistant', content: partial || '(stopped before writing anything)' });
-                } else {
-                    const code = (e && e.code) || 'upstream_error';
-                    thinkingBubble.remove();
-                    addJaniceAssistantRow('assistant', JANICE_ASSISTANT_ERROR_COPY[code] || JANICE_ASSISTANT_ERROR_COPY.upstream_error, { error: true });
-                    janiceAssistantTurns.pop(); // drop the user turn we got no paired reply for
-                    if (JANICE_ASSISTANT_HIDE_CODES.has(code)) {
-                        showJaniceAssistantUnavailable();
-                        return;
-                    }
-                }
-            } finally {
-                janiceAssistantController = null;
-                if (sendBtn) { sendBtn.disabled = false; sendBtn.classList.remove('hidden'); }
-                if (stopBtn) stopBtn.classList.add('hidden');
-                const thread = document.getElementById('janice-assistant-thread');
-                if (thread) thread.scrollTop = thread.scrollHeight;
-            }
-        }
-
-        function stopJaniceAssistantMessage() {
-            if (janiceAssistantController) janiceAssistantController.abort();
         }
 
         const JANICE_CHEER_MESSAGES = ['You\'ve got this! 🌟', 'Team MVP! 🎉', 'Boss energy! ✨', 'Keep going! 💪'];
@@ -4633,8 +4379,7 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             syncPanelHeights();
-            makeJanicePanelDraggable('janice-notes-panel', 'janice-notes-header');
-            makeJanicePanelDraggable('janice-assistant-panel', 'janice-assistant-header');
+            makeJanicePanelDraggable();
             const draggables = document.querySelectorAll('.draggable-class');
             const dropZones = document.querySelectorAll('.drop-zone');
             const unassignedList = document.getElementById('unassigned-list');
