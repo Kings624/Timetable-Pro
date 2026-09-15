@@ -392,6 +392,36 @@
             font-size: 0.75rem;
         }
 
+        /* ==== PIN edit lock ==== */
+        body.edit-locked .class-block,
+        body.edit-locked .draggable-class,
+        body.edit-locked .compare-column-title {
+            cursor: not-allowed !important;
+        }
+        body.edit-locked .manual-add-hint {
+            opacity: 0.5;
+        }
+        .lock-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: #1f2937;
+            color: white;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: none;
+            z-index: 100;
+            white-space: nowrap;
+        }
+        .lock-toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
         /* Text-size accessibility: a permanent +40% (no toggle). The
            sidebar already scrolls internally without issue, so a simple
            zoom is fine there. The main timetable grid instead adapts its
@@ -1013,6 +1043,17 @@
 
             <div class="w-px h-6 bg-gray-200 mx-1"></div>
 
+            <!-- Edit lock — everyone can view every TA freely; only the
+                 shared admin PIN unlocks editing. See requireEdit(). -->
+            <span id="lock-badge" class="text-xs px-2.5 py-1 rounded-full font-semibold bg-gray-200 text-gray-600"></span>
+            <button id="lock-btn" onclick="onLockButtonClick()" title="Enter admin PIN to edit" class="p-2 rounded-md border border-gray-300 hover:bg-gray-100 text-gray-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+            </button>
+
+            <div class="w-px h-6 bg-gray-200 mx-1"></div>
+
             <button onclick="openDataModal()" class="bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 px-3.5 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h3m-3-4l4 4-4 4m-6 4a4 4 0 01-4-4V7a4 4 0 014-4h6" />
@@ -1024,6 +1065,47 @@
             </button>
         </div>
     </nav>
+
+    <!-- PIN entry modal -->
+    <div id="pin-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-[70]">
+        <div class="bg-white rounded-xl shadow-xl p-6 w-80">
+            <h2 class="text-base font-bold text-gray-900 mb-1">Enter admin PIN</h2>
+            <p class="text-xs text-gray-500 mb-4">Shared by both admins — everyone else can view freely but needs this to edit.</p>
+            <input id="pin-modal-input" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-center text-lg tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-blue-400"
+                   onkeydown="if(event.key==='Enter') submitPinModal()">
+            <p id="pin-modal-error" class="hidden text-xs text-red-500 mt-2 text-center">Incorrect PIN — try again.</p>
+            <div class="flex gap-2 mt-4">
+                <button onclick="closePinModal()" class="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onclick="submitPinModal()" class="flex-1 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">Unlock</button>
+            </div>
+            <button onclick="openChangePinModal()" class="w-full text-center text-xs text-gray-400 hover:text-blue-600 mt-3 underline">Change the PIN</button>
+        </div>
+    </div>
+
+    <!-- Change-PIN modal, gated by an admin email check -->
+    <div id="change-pin-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-[70]">
+        <div class="bg-white rounded-xl shadow-xl p-6 w-80">
+            <h2 class="text-base font-bold text-gray-900 mb-1">Change admin PIN</h2>
+            <p class="text-xs text-gray-500 mb-4">Only the two admins' emails can do this. This changes the PIN for everyone.</p>
+            <label class="text-xs font-medium text-gray-600">Admin email</label>
+            <input id="change-pin-email" type="email" placeholder="you@example.com" autocomplete="off"
+                   class="w-full mt-1 mb-3 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <label class="text-xs font-medium text-gray-600">New PIN</label>
+            <input id="change-pin-new" type="password" inputmode="numeric" maxlength="8" placeholder="New PIN"
+                   class="w-full mt-1 mb-3 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <label class="text-xs font-medium text-gray-600">Confirm new PIN</label>
+            <input id="change-pin-confirm" type="password" inputmode="numeric" maxlength="8" placeholder="Confirm new PIN"
+                   class="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                   onkeydown="if(event.key==='Enter') submitChangePin()">
+            <p id="change-pin-error" class="hidden text-xs text-red-500 mt-2">Error</p>
+            <p id="change-pin-success" class="hidden text-xs text-emerald-600 mt-2">PIN changed successfully.</p>
+            <div class="flex gap-2 mt-4">
+                <button onclick="closeChangePinModal()" class="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50">Close</button>
+                <button onclick="submitChangePin()" class="flex-1 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">Change PIN</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Print-only content, built fresh each export by exportTimetableToPDF(); hidden on screen -->
     <div id="printable-timetable"></div>
@@ -1721,6 +1803,197 @@
 
         const STORAGE_KEY = 'ta_timetable_scheduler_state_v1';
 
+        // ==== PIN edit lock ====
+        // Everyone can view every TA's timetable freely; only entering the
+        // shared admin PIN unlocks editing. The PIN itself lives in the
+        // shared Supabase row (see buildStateSnapshot/applyLoadedState) so
+        // either admin can change it without a redeploy — this default is
+        // only what a brand-new/local-only install starts with.
+        let sharedAdminPin = '2468';
+        // The two people allowed to change the PIN (checked by email, typed
+        // into the "Change the PIN" dialog). Not synced via Supabase — edit
+        // this constant directly if the admins ever change.
+        const SUPER_ADMIN_EMAILS = ['janice.yang@gmail.com', 'admin2@example.com'];
+        // Unlocking lasts only for this browser tab (sessionStorage, not
+        // localStorage) — closing the tab or reloading in a fresh one
+        // re-locks.
+        let editUnlocked = false;
+        try { editUnlocked = sessionStorage.getItem('ta_timetable_edit_unlocked') === '1'; } catch (e) {}
+
+        // Call at the top of any function that mutates shared timetable
+        // data. Returns true (proceed) when unlocked; otherwise shows a
+        // toast and returns false so the caller can bail out.
+        function requireEdit() {
+            if (editUnlocked) return true;
+            showLockToast('View only — enter the admin PIN to edit');
+            return false;
+        }
+
+        function showLockToast(message) {
+            let toast = document.getElementById('lock-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'lock-toast';
+                toast.className = 'lock-toast';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = message;
+            toast.classList.add('show');
+            clearTimeout(showLockToast._t);
+            showLockToast._t = setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+
+        function openPinModal() {
+            document.getElementById('pin-modal').classList.remove('hidden');
+            document.getElementById('pin-modal-error').classList.add('hidden');
+            const input = document.getElementById('pin-modal-input');
+            input.value = '';
+            setTimeout(() => input.focus(), 50);
+        }
+        function closePinModal() {
+            document.getElementById('pin-modal').classList.add('hidden');
+        }
+        function submitPinModal() {
+            const val = document.getElementById('pin-modal-input').value;
+            if (val === sharedAdminPin) {
+                editUnlocked = true;
+                try { sessionStorage.setItem('ta_timetable_edit_unlocked', '1'); } catch (e) {}
+                closePinModal();
+                applyLockUI();
+                showLockToast('Unlocked — editing enabled for this tab');
+            } else {
+                document.getElementById('pin-modal-error').classList.remove('hidden');
+            }
+        }
+        function lockEditingNow() {
+            editUnlocked = false;
+            try { sessionStorage.removeItem('ta_timetable_edit_unlocked'); } catch (e) {}
+            applyLockUI();
+            showLockToast('Locked — view only now');
+        }
+        function onLockButtonClick() {
+            if (editUnlocked) lockEditingNow(); else openPinModal();
+        }
+
+        function openChangePinModal() {
+            closePinModal();
+            document.getElementById('change-pin-modal').classList.remove('hidden');
+            document.getElementById('change-pin-error').classList.add('hidden');
+            document.getElementById('change-pin-success').classList.add('hidden');
+            ['change-pin-email', 'change-pin-new', 'change-pin-confirm'].forEach(id => document.getElementById(id).value = '');
+            setTimeout(() => document.getElementById('change-pin-email').focus(), 50);
+        }
+        function closeChangePinModal() {
+            document.getElementById('change-pin-modal').classList.add('hidden');
+        }
+        async function submitChangePin() {
+            const email = document.getElementById('change-pin-email').value.trim().toLowerCase();
+            const newPin = document.getElementById('change-pin-new').value.trim();
+            const confirmPin = document.getElementById('change-pin-confirm').value.trim();
+            const errorEl = document.getElementById('change-pin-error');
+            const successEl = document.getElementById('change-pin-success');
+            const isAuthorized = SUPER_ADMIN_EMAILS.some(e => e.toLowerCase() === email);
+            if (!isAuthorized) {
+                errorEl.textContent = "This email isn't on the admin list — the PIN wasn't changed.";
+                errorEl.classList.remove('hidden');
+                successEl.classList.add('hidden');
+                return;
+            }
+            if (!newPin || newPin.length < 4) {
+                errorEl.textContent = 'Enter a PIN of at least 4 characters.';
+                errorEl.classList.remove('hidden');
+                successEl.classList.add('hidden');
+                return;
+            }
+            if (newPin !== confirmPin) {
+                errorEl.textContent = "The two PINs don't match.";
+                errorEl.classList.remove('hidden');
+                successEl.classList.add('hidden');
+                return;
+            }
+            errorEl.classList.add('hidden');
+            const ok = await persistSharedAdminPin(newPin);
+            if (ok) {
+                successEl.textContent = 'PIN changed — the new PIN is required for everyone from now on.';
+                successEl.classList.remove('hidden');
+                showLockToast('PIN changed');
+            } else {
+                errorEl.textContent = "Saved locally, but couldn't reach the shared cloud data — other devices may still use the old PIN until this syncs.";
+                errorEl.classList.remove('hidden');
+            }
+        }
+        // Updates the PIN everywhere: locally right away, and merged into a
+        // freshly-fetched copy of the shared cloud row (not this tab's
+        // possibly-stale in-memory copy) so changing the PIN can't
+        // accidentally overwrite someone else's more recent timetable edits
+        // with whatever this tab happened to have loaded.
+        async function persistSharedAdminPin(newPin) {
+            sharedAdminPin = newPin;
+            saveStateToStorage();
+            if (!isCloudConfigured()) return true;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('app_state')
+                    .select('data')
+                    .eq('id', SUPABASE_ROW_ID)
+                    .single();
+                if (error) throw error;
+                const remoteData = (data && data.data) || {};
+                remoteData.sharedAdminPin = newPin;
+                remoteData.savedAt = new Date().toISOString();
+                const { error: upsertError } = await supabaseClient
+                    .from('app_state')
+                    .upsert({ id: SUPABASE_ROW_ID, data: remoteData, updated_at: new Date().toISOString() });
+                if (upsertError) throw upsertError;
+                lastKnownRemoteSavedAt = remoteData.savedAt;
+                return true;
+            } catch (e) {
+                console.error('Failed to sync PIN to cloud:', e);
+                return false;
+            }
+        }
+
+        // Reflects the current lock state everywhere it needs to show:
+        // the nav badge/button, Janice's notes/cheer icons (fully hidden,
+        // not just disabled, while locked), and her notes panel (force-
+        // closed if it happened to be open when locking).
+        function applyLockUI() {
+            document.body.classList.toggle('edit-locked', !editUnlocked);
+            const badge = document.getElementById('lock-badge');
+            const btn = document.getElementById('lock-btn');
+            if (badge) {
+                badge.textContent = editUnlocked ? '🔓 Editing (Admin)' : '🔒 View only';
+                badge.className = editUnlocked
+                    ? 'text-xs px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700'
+                    : 'text-xs px-2.5 py-1 rounded-full font-semibold bg-gray-200 text-gray-600';
+            }
+            if (btn) btn.title = editUnlocked ? 'Lock editing again' : 'Enter admin PIN to edit';
+            if (typeof applyJaniceTheme === 'function' && currentActiveTA === 'janice') {
+                applyJaniceTheme(true); // re-run its icon-visibility logic now that the lock state changed
+            }
+            if (!editUnlocked) {
+                const notesPanel = document.getElementById('janice-notes-panel');
+                if (notesPanel) notesPanel.classList.add('hidden');
+            }
+            if (typeof renderCompareGrid === 'function' && compareOrder && compareOrder.length) {
+                renderCompareGrid(); // re-render so cards pick up the locked/unlocked drag-handle state
+            }
+        }
+
+        // Single choke point for every drag-based edit (class blocks,
+        // sidebar cards, Compare View's card reorder) rather than adding a
+        // guard to each of the several dragstart listeners scattered
+        // through the file — capturing phase runs before the target's own
+        // listener, and preventDefault() on 'dragstart' aborts the drag
+        // natively regardless of what any listener on the dragged element
+        // itself tries to do.
+        document.addEventListener('dragstart', (e) => {
+            if (!editUnlocked) {
+                e.preventDefault();
+                showLockToast('View only — enter the admin PIN to edit');
+            }
+        }, true);
+
         let lastKnownRemoteSavedAt = null;
         let cloudPollTimer = null;
 
@@ -1750,6 +2023,11 @@
                 state.taListData.forEach(t => taListData.push(t));
             }
             if (state.currentActiveTA) currentActiveTA = state.currentActiveTA;
+            // Falls back to whatever's already in memory (the '2468' default,
+            // or a PIN this tab already knows about) if the shared row
+            // doesn't have one yet — e.g. the very first load after this
+            // feature shipped, before anyone has changed it.
+            if (state.sharedAdminPin) sharedAdminPin = state.sharedAdminPin;
         }
 
         function buildStateSnapshot() {
@@ -1759,6 +2037,7 @@
                 classNeedsData: classNeedsData,
                 taListData: taListData,
                 currentActiveTA: currentActiveTA,
+                sharedAdminPin: sharedAdminPin,
                 savedAt: new Date().toISOString()
             };
         }
@@ -1787,6 +2066,7 @@
         }
 
         function performUndo() {
+            if (!requireEdit()) return;
             if (!undoStack.length) return;
             isRestoringState = true;
             redoStack.push(deepCloneState());
@@ -1799,6 +2079,7 @@
         }
 
         function performRedo() {
+            if (!requireEdit()) return;
             if (!redoStack.length) return;
             isRestoringState = true;
             undoStack.push(deepCloneState());
@@ -1979,6 +2260,7 @@
         // "Save Changes" button — pushes to the shared Supabase database when configured
         // (everyone will see this), and always also caches locally.
         async function saveAllChanges() {
+            if (!requireEdit()) return;
             saveCurrentTimetableState();
             const localOk = saveStateToStorage();
 
@@ -3553,13 +3835,21 @@
         // running through the exact same code path as everyone else's view.
         function applyJaniceTheme(isJanice) {
             document.body.classList.toggle('janice-theme', isJanice);
-            ['janice-flair', 'janice-notes-btn', 'janice-cheer-btn', 'janice-signoff'].forEach(id => {
+            ['janice-flair', 'janice-signoff'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.toggle('hidden', !isJanice);
             });
-            if (!isJanice) {
+            // Notes/cheer are edit-tier features (they write to her private
+            // notes/checklist) — hidden entirely (not just disabled) unless
+            // she's both selected AND the PIN is unlocked, so a locked
+            // viewer can't even reach the icon.
+            ['janice-notes-btn', 'janice-cheer-btn'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', !(isJanice && editUnlocked));
+            });
+            if (!isJanice || !editUnlocked) {
                 // Don't leave her notes open hanging over someone else's screen
-                // after switching away from her.
+                // after switching away from her, or once the tab re-locks.
                 const panel = document.getElementById('janice-notes-panel');
                 if (panel) panel.classList.add('hidden');
             }
@@ -3591,6 +3881,7 @@
         }
 
         function updateJaniceNotes(value) {
+            if (!requireEdit()) return;
             const ta = taDatabase.find(t => t.id === 'janice');
             if (!ta) return;
             ta.privateNotes = value; // rides along in the normal save/undo snapshots, no extra wiring needed
@@ -3710,6 +4001,7 @@
         }
 
         function addJaniceChecklistItem() {
+            if (!requireEdit()) return;
             const input = document.getElementById('janice-checklist-input');
             const text = input.value.trim();
             if (!text) return;
@@ -3719,12 +4011,17 @@
         }
 
         function toggleJaniceChecklistItem(idx) {
+            // The checkbox's own checked state already flipped visually before
+            // this handler runs — re-render (without applying the change) to
+            // snap it back if editing isn't unlocked.
+            if (!requireEdit()) { renderJaniceChecklist(); return; }
             const items = getJaniceChecklist();
             if (items[idx]) items[idx].done = !items[idx].done;
             renderJaniceChecklist();
         }
 
         function removeJaniceChecklistItem(idx) {
+            if (!requireEdit()) return;
             getJaniceChecklist().splice(idx, 1);
             renderJaniceChecklist();
         }
@@ -3960,6 +4257,7 @@
         // Setup, in which case there's nowhere real to return it to, so it's just
         // removed outright instead of leaving a stranded "orphan" card behind.
         function cancelPlacement(block) {
+            if (!requireEdit()) return;
             if (!block || !block.dataset.classData) return;
             const cell = block.closest('.drop-zone');
             if (!cell) return;
@@ -4323,6 +4621,7 @@
         }
 
         function startManualEntry(cell) {
+            if (!requireEdit()) return;
             if (!cell || cell.querySelector('.class-block')) return;
             cell.innerHTML = `
                 <div class="manual-entry-form p-1">
@@ -4657,6 +4956,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
+            applyLockUI();
             initSidebarCollapse();
             syncPanelHeights();
             fitAdaptiveTimetable();
@@ -5281,6 +5581,7 @@
         }
 
         function assignCover(taId, week, day, period) {
+            if (!requireEdit()) return;
             if (currentCoverBlock) {
                 pushUndoSnapshot();
                 const coveringTA = taDatabase.find(t => t.id === taId);
@@ -5404,6 +5705,7 @@
         let dataModalOpenSnapshot = null;
 
         function openDataModal() {
+            if (!requireEdit()) return;
             dataModalOpenSnapshot = deepCloneState();
             switchDataTab('needs');
             renderClassNeedsTable();
@@ -6374,14 +6676,21 @@
             const isJanice = kind === 'ta' && id === 'janice';
             const janiceClass = isJanice ? (week === 'A' ? ' compare-janice-a' : ' compare-janice-b') : '';
             const janiceFlair = isJanice ? (week === 'A' ? '🌷 ' : '👑 ') : '';
+            // Reordering mutates no shared timetable data, but stays behind
+            // the same PIN as everything else for consistency — the drag
+            // handle icon is left out entirely (not just disabled) while
+            // locked, same "can't even reach it" treatment as Janice's icons.
+            const dragHandle = editUnlocked
+                ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
+                        </svg>`
+                : '';
             return `
                 <div class="compare-column shrink-0${janiceClass}" data-compare-key="${escapeHtml(key)}"
                      ondragover="compareDragOver(event)" ondragleave="compareDragLeave(event)" ondrop="compareDrop(event, '${key}')">
-                    <div class="compare-column-title" draggable="true"
+                    <div class="compare-column-title" draggable="${editUnlocked}"
                          ondragstart="compareDragStart(event, '${key}')" ondragend="compareDragEnd(event)">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
-                        </svg>
+                        ${dragHandle}
                         <span class="truncate flex-1" title="${escapeHtml(title)}">${janiceFlair}${escapeHtml(title)}</span>
                         <button type="button" title="Remove from comparison" onmousedown="event.stopPropagation()" onclick="removeCompareCard('${key}')" class="text-gray-300 hover:text-red-500 shrink-0 cursor-pointer leading-none text-base transition-colors">&times;</button>
                     </div>
