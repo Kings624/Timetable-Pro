@@ -57,7 +57,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&family=Fredoka:wght@500;600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&family=Fredoka:wght@500;600;700&family=Caveat:wght@600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         /* Custom styles for drag and drop interactions and timetable layout */
         body {
@@ -470,11 +470,6 @@
             0%, 100% { transform: scale(1) rotate(0deg); }
             50% { transform: scale(1.15) rotate(8deg); }
         }
-        .janice-theme .main-panel {
-            background:
-                radial-gradient(#e9d4c4 1.5px, transparent 2px) 0 0/20px 20px,
-                #fdf7f2;
-        }
         .janice-theme .class-title {
             font-family: 'Fredoka', 'Poppins', sans-serif;
         }
@@ -501,10 +496,23 @@
             transform: rotate(-2.5deg);
             z-index: -1;
         }
+        /* Little-Prince-style paper texture, one motif per week: a tiny rose
+           for Week A, a tiny crown for Week B — plain inline SVGs tiled as a
+           background-image (no external asset files), each drawn in a very
+           pale tint of that week's accent color so it reads as texture, not
+           clutter. toggleWeek()/applyJaniceTheme() mirror the active week
+           onto .main-panel as .week-b-active-panel (it has no ancestor in
+           common with the header row's own week-active class to hang a
+           single selector off of). */
         .janice-theme .main-panel {
             background:
-                radial-gradient(#e9d4c4 1.5px, transparent 2px) 0 0/20px 20px,
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg fill='none' stroke='%23f0c9d4' stroke-width='1.3' stroke-linecap='round'%3E%3Ccircle cx='20' cy='15' r='4.5'/%3E%3Cpath d='M20 19 Q17 23 14.5 21.5 Q15.5 25.5 18.5 27'/%3E%3Cpath d='M20 19 Q23 23 25.5 21.5 Q24.5 25.5 21.5 27'/%3E%3Cpath d='M20 10.5 Q17 8 14.5 9.5'/%3E%3Cpath d='M20 10.5 Q23 8 25.5 9.5'/%3E%3C/g%3E%3C/svg%3E") 0 0/48px 48px repeat,
                 #fdf7f2;
+        }
+        .janice-theme .main-panel.week-b-active-panel {
+            background:
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg fill='none' stroke='%23a9d6ee' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 25 L13.5 15 L18 20.5 L20 12 L22 20.5 L26.5 15 L28 25 Z'/%3E%3Cline x1='12' y1='25' x2='28' y2='25'/%3E%3C/g%3E%3C/svg%3E") 0 0/48px 48px repeat,
+                #f4fbfe;
         }
 
         /* Week A = rose (warm), Week B = sky blue (cool) — a lighter, more
@@ -567,7 +575,8 @@
             color: #E8879B;
         }
 
-        /* Confetti burst for the "🎉" cheer button — plain divs, no canvas/lib
+        /* Confetti burst for the "🎉" cheer button, and the falling rose
+           petals for the auto-greeting — plain divs/emoji, no canvas/lib
            needed. Pieces are fixed + pointer-events:none, so none of this
            can ever sit between a click and whatever's underneath it. */
         .janice-confetti-piece {
@@ -582,34 +591,56 @@
             80% { opacity: 1; }
             100% { transform: translate(var(--drift, 0), 105vh) rotate(540deg) scale(0.8); opacity: 0; }
         }
-        #janice-cheer-toast {
+        .janice-petal-piece {
             position: fixed;
-            top: 18%;
+            top: -24px;
+            z-index: 9999;
+            pointer-events: none;
+            animation-name: janice-petal-fall;
+            animation-timing-function: ease-in;
+            animation-fill-mode: forwards;
+        }
+        @keyframes janice-petal-fall {
+            0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+            50% { transform: translate(calc(var(--drift, 0) * 0.5), 50vh) rotate(160deg); }
+            85% { opacity: 1; }
+            100% { transform: translate(var(--drift, 0), 105vh) rotate(320deg); opacity: 0; }
+        }
+        /* Shared toast for both the cheer button and the switch-in greeting —
+           a rounded card rather than a pill, since greeting lines run to a
+           full sentence and need room to wrap instead of one short phrase. */
+        .janice-toast {
+            position: fixed;
+            top: 16%;
             left: 50%;
+            max-width: min(420px, 86vw);
             transform: translate(-50%, -12px);
             font-family: 'Fredoka', sans-serif;
-            font-size: 28px;
-            font-weight: 700;
+            font-size: 18px;
+            font-weight: 600;
+            line-height: 1.35;
+            text-align: center;
+            white-space: normal;
             color: #ffffff;
             text-shadow: 0 2px 10px rgba(74, 59, 71, 0.5);
             background: linear-gradient(135deg, #E8879B, #E3A73E);
-            padding: 12px 28px;
-            border-radius: 999px;
+            padding: 14px 26px;
+            border-radius: 20px;
             box-shadow: 0 10px 30px -6px rgba(74, 59, 71, 0.45);
             z-index: 10000;
             pointer-events: none;
             opacity: 0;
-            animation: janice-toast-pop 1.8s ease forwards;
+            animation: janice-toast-pop 2.6s ease forwards;
         }
         @keyframes janice-toast-pop {
             0% { opacity: 0; transform: translate(-50%, 8px) scale(0.85); }
-            15% { opacity: 1; transform: translate(-50%, -12px) scale(1.05); }
-            25% { transform: translate(-50%, -12px) scale(1); }
-            80% { opacity: 1; }
+            10% { opacity: 1; transform: translate(-50%, -12px) scale(1.05); }
+            18% { transform: translate(-50%, -12px) scale(1); }
+            85% { opacity: 1; }
             100% { opacity: 0; transform: translate(-50%, -28px) scale(1); }
         }
         @media (prefers-reduced-motion: reduce) {
-            .janice-confetti-piece, #janice-cheer-toast {
+            .janice-confetti-piece, .janice-petal-piece, .janice-toast {
                 animation: none;
                 display: none;
             }
@@ -869,16 +900,29 @@
 
     <!-- Janice's private notes — only ever opened/shown while she's the
          selected TA (see toggleJaniceNotes/applyJaniceTheme). Stored as
-         ta.privateNotes, an optional field that rides along in the same
-         shared save file as everything else — "private" here means "not
-         shown in anyone else's view", not a real access-controlled secret,
-         since this app has no per-user login. -->
-    <div id="janice-notes-panel" class="hidden fixed bottom-6 right-6 z-40 w-72 bg-white border border-pink-200 rounded-2xl shadow-xl p-4">
-        <div class="flex justify-between items-center mb-2">
-            <span class="text-sm font-semibold text-pink-700" style="font-family:'Fredoka','Poppins',sans-serif;">📝 My Notes</span>
+         ta.privateNotes / ta.privateChecklist, optional fields that ride
+         along in the same shared save file as everything else — "private"
+         here means "not shown in anyone else's view", not a real
+         access-controlled secret, since this app has no per-user login.
+         Positioned with inline left/top (not the bottom-6/right-6 Tailwind
+         classes) so makeJanicePanelDraggable can move it — see that
+         function for why. -->
+    <div id="janice-notes-panel" class="hidden fixed z-40 w-72 bg-white border-2 border-pink-200 rounded-2xl shadow-xl p-4" style="left: calc(100vw - 320px); top: calc(100vh - 420px);">
+        <div id="janice-notes-header" class="flex justify-between items-center mb-2 cursor-move select-none" title="Drag to move">
+            <span class="text-sm font-semibold text-pink-700 flex items-center gap-1" style="font-family:'Fredoka','Poppins',sans-serif;">📝 My Notes <span class="text-[10px] text-pink-300 font-normal">⠿ drag me</span></span>
             <button onclick="toggleJaniceNotes()" class="text-gray-400 hover:text-gray-600 text-sm leading-none">✕</button>
         </div>
-        <textarea id="janice-notes-textarea" oninput="updateJaniceNotes(this.value)" rows="6" placeholder="Just for you — reminders, to-dos, anything." class="w-full text-sm border border-pink-100 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none"></textarea>
+        <textarea id="janice-notes-textarea" oninput="updateJaniceNotes(this.value)" rows="4" placeholder="Just for you — reminders, to-dos, anything 🌷" class="w-full text-sm border border-pink-100 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none" style="font-family:'Quicksand','Poppins',sans-serif;"></textarea>
+
+        <div class="mt-3 pt-3 border-t border-dashed border-pink-200">
+            <div class="text-xs font-semibold text-pink-500 mb-1.5 flex items-center gap-1">✓ Checklist</div>
+            <div class="flex gap-1 mb-2">
+                <input type="text" id="janice-checklist-input" placeholder="Add a to-do…" onkeydown="if(event.key==='Enter') addJaniceChecklistItem()" class="flex-1 text-xs border border-pink-100 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pink-300">
+                <button onclick="addJaniceChecklistItem()" title="Add" class="text-sm bg-pink-100 hover:bg-pink-200 text-pink-700 rounded-lg px-2.5 font-bold transition-colors">+</button>
+            </div>
+            <ul id="janice-checklist-list" class="space-y-1 max-h-32 overflow-y-auto"></ul>
+        </div>
+
         <p class="text-[10px] text-gray-400 mt-2">Only shown in your own view — heads up though, it's saved in the same shared file as everything else, not a truly private/encrypted note.</p>
     </div>
 
@@ -2972,8 +3016,14 @@
         // Switch the currently viewed TA
         function switchActiveTA(taId) {
             saveCurrentTimetableState(); // save the current TA's changes first
+            const enteringJanice = taId === 'janice' && currentActiveTA !== 'janice';
             currentActiveTA = taId;
             loadTimetableForActiveTA();  // load the new TA's timetable
+            // Only on an actual switch INTO her from someone else — not on
+            // every re-render while she's already selected (undo/redo,
+            // Data Setup Apply, etc. all call loadTimetableForActiveTA too,
+            // and firing this on each of those would get old fast).
+            if (enteringJanice) fireJaniceGreeting();
         }
 
         // Save the on-screen timetable state into the matching TA object
@@ -3361,9 +3411,20 @@
                 const panel = document.getElementById('janice-notes-panel');
                 if (panel) panel.classList.add('hidden');
             }
+            // Sync the paper texture (rose vs. crown, see .main-panel.week-b-
+            // active-panel) to whichever week is already showing — toggleWeek()
+            // keeps this in sync when the tab is clicked, but switching TA
+            // doesn't go through toggleWeek, so a switch straight into her
+            // view (with Week B left showing from a previous TA) needs this
+            // checked here too.
+            const bodyB = document.getElementById('timetable-body-b');
+            const mainPanel = document.querySelector('.main-panel');
+            if (mainPanel && bodyB) {
+                mainPanel.classList.toggle('week-b-active-panel', !bodyB.classList.contains('hidden'));
+            }
         }
 
-        // ---- Two small extras shown only while Janice is selected ----
+        // ---- Small extras shown only while Janice is selected ----
 
         function toggleJaniceNotes() {
             const panel = document.getElementById('janice-notes-panel');
@@ -3373,6 +3434,7 @@
             if (opening) {
                 const ta = taDatabase.find(t => t.id === 'janice');
                 document.getElementById('janice-notes-textarea').value = (ta && ta.privateNotes) || '';
+                renderJaniceChecklist();
             }
         }
 
@@ -3380,6 +3442,80 @@
             const ta = taDatabase.find(t => t.id === 'janice');
             if (!ta) return;
             ta.privateNotes = value; // rides along in the normal save/undo snapshots, no extra wiring needed
+        }
+
+        // Drag-to-move for the notes panel — mousedown on its header starts
+        // tracking, mousemove repositions it via left/top (clamped to stay
+        // fully on-screen), mouseup stops. Bound once at load; the panel
+        // itself is a single static element (never recreated), so this never
+        // needs rebinding the way per-block listeners elsewhere in the app do.
+        function makeJanicePanelDraggable() {
+            const panel = document.getElementById('janice-notes-panel');
+            const handle = document.getElementById('janice-notes-header');
+            if (!panel || !handle) return;
+            let dragging = false, offsetX = 0, offsetY = 0;
+
+            handle.addEventListener('mousedown', (e) => {
+                dragging = true;
+                const rect = panel.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                panel.style.left = rect.left + 'px';
+                panel.style.top = rect.top + 'px';
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (!dragging) return;
+                const maxX = window.innerWidth - panel.offsetWidth - 4;
+                const maxY = window.innerHeight - 40;
+                panel.style.left = Math.max(4, Math.min(maxX, e.clientX - offsetX)) + 'px';
+                panel.style.top = Math.max(4, Math.min(maxY, e.clientY - offsetY)) + 'px';
+            });
+            document.addEventListener('mouseup', () => { dragging = false; });
+        }
+
+        // ---- Checklist inside the notes panel — a second optional field,
+        // ta.privateChecklist (array of {text, done}), same additive/
+        // backward-compatible pattern as privateNotes. ----
+
+        function getJaniceChecklist() {
+            const ta = taDatabase.find(t => t.id === 'janice');
+            if (!ta) return [];
+            if (!Array.isArray(ta.privateChecklist)) ta.privateChecklist = [];
+            return ta.privateChecklist;
+        }
+
+        function renderJaniceChecklist() {
+            const list = document.getElementById('janice-checklist-list');
+            if (!list) return;
+            const items = getJaniceChecklist();
+            list.innerHTML = items.length ? items.map((item, idx) => `
+                <li class="flex items-center gap-1.5 text-xs group">
+                    <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleJaniceChecklistItem(${idx})" class="accent-pink-500 shrink-0">
+                    <span class="${item.done ? 'line-through text-gray-400' : 'text-gray-700'} flex-1 break-words">${escapeHtml(item.text)}</span>
+                    <button onclick="removeJaniceChecklistItem(${idx})" title="Remove" class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">×</button>
+                </li>
+            `).join('') : '<li class="text-[11px] text-gray-300 italic">Nothing yet ✨</li>';
+        }
+
+        function addJaniceChecklistItem() {
+            const input = document.getElementById('janice-checklist-input');
+            const text = input.value.trim();
+            if (!text) return;
+            getJaniceChecklist().push({ text, done: false });
+            input.value = '';
+            renderJaniceChecklist();
+        }
+
+        function toggleJaniceChecklistItem(idx) {
+            const items = getJaniceChecklist();
+            if (items[idx]) items[idx].done = !items[idx].done;
+            renderJaniceChecklist();
+        }
+
+        function removeJaniceChecklistItem(idx) {
+            getJaniceChecklist().splice(idx, 1);
+            renderJaniceChecklist();
         }
 
         const JANICE_CHEER_MESSAGES = ['You\'ve got this! 🌟', 'Team MVP! 🎉', 'Boss energy! ✨', 'Keep going! 💪'];
@@ -3402,11 +3538,91 @@
                 piece.addEventListener('animationend', () => piece.remove());
             }
 
+            showJaniceToast(JANICE_CHEER_MESSAGES[Math.floor(Math.random() * JANICE_CHEER_MESSAGES.length)]);
+        }
+
+        function showJaniceToast(message) {
             const toast = document.createElement('div');
-            toast.id = 'janice-cheer-toast';
-            toast.textContent = JANICE_CHEER_MESSAGES[Math.floor(Math.random() * JANICE_CHEER_MESSAGES.length)];
+            toast.className = 'janice-toast';
+            toast.textContent = message;
             document.body.appendChild(toast);
             toast.addEventListener('animationend', () => toast.remove());
+        }
+
+        // ---- Greeting fired every time she's freshly switched into (see
+        // switchActiveTA) — a context-aware line (time of day, Monday/Friday,
+        // how full today looks) plus a fall of rose petals instead of the
+        // cheer button's confetti mix. ----
+
+        const JANICE_GREETINGS = {
+            monday: ['New week, new page 🌟 you\'ve got this.', 'Monday mode: on. Ease into it.'],
+            friday: ['It\'s Friday! Nearly there 🎉', 'Friday energy — coast it home.'],
+            morning: ['☕ Coffee first, then the day.', 'Morning! Deep breath, here we go 🌸'],
+            afternoon_heavy: ['Busy afternoon ahead — a full one. Sip some water 💧', 'Lots on today — you\'re handling it better than you think.'],
+            afternoon_light: ['Quiet afternoon — a good one for a breather 🌷', 'Light day — sneak in a little slack time 😌'],
+            evening: ['Nearly home time — one more push 🌙', 'You\'ve nearly made it through today 💫'],
+            heavy: ['Packed day today — one step at a time, you\'ve got this 🌟', 'Full schedule — remember to breathe between classes.'],
+            light: ['Light one today — enjoy the extra room to breathe 🌷', 'Easy day ahead — take it slow ☕'],
+            generic: ['You\'re doing great today ✨', 'Thanks for keeping this whole place running 🌹', 'Boss, you\'re amazing 💗']
+        };
+
+        function janiceGreetingContext() {
+            const now = new Date();
+            const hour = now.getHours();
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const today = dayNames[now.getDay()];
+
+            let timeOfDay = 'morning';
+            if (hour >= 12 && hour < 17) timeOfDay = 'afternoon';
+            else if (hour >= 17 || hour < 6) timeOfDay = 'evening';
+
+            let classCount = 0;
+            if (DAY_OPTIONS.includes(today)) {
+                const bodyB = document.getElementById('timetable-body-b');
+                const activeWeek = bodyB && !bodyB.classList.contains('hidden') ? 'B' : 'A';
+                const ta = taDatabase.find(t => t.id === 'janice');
+                const dayData = ta && ta.timetables[activeWeek] && ta.timetables[activeWeek][today];
+                if (dayData) classCount = Object.values(dayData).filter(entry => entry && entry.html).length;
+            }
+            let load = 'normal';
+            if (classCount >= 4) load = 'heavy';
+            else if (classCount <= 1) load = 'light';
+
+            return { timeOfDay, today, load };
+        }
+
+        function fireJaniceGreeting() {
+            const ctx = janiceGreetingContext();
+            let pool = [];
+            if (ctx.today === 'Mon') pool = pool.concat(JANICE_GREETINGS.monday);
+            if (ctx.today === 'Fri') pool = pool.concat(JANICE_GREETINGS.friday);
+            if (ctx.timeOfDay === 'morning') pool = pool.concat(JANICE_GREETINGS.morning);
+            if (ctx.timeOfDay === 'evening') pool = pool.concat(JANICE_GREETINGS.evening);
+            if (ctx.timeOfDay === 'afternoon' && ctx.load === 'heavy') pool = pool.concat(JANICE_GREETINGS.afternoon_heavy);
+            if (ctx.timeOfDay === 'afternoon' && ctx.load === 'light') pool = pool.concat(JANICE_GREETINGS.afternoon_light);
+            if (ctx.load === 'heavy') pool = pool.concat(JANICE_GREETINGS.heavy);
+            if (ctx.load === 'light') pool = pool.concat(JANICE_GREETINGS.light);
+            if (!pool.length) pool = JANICE_GREETINGS.generic;
+
+            showJaniceToast(pool[Math.floor(Math.random() * pool.length)]);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                fireJaniceRosePetals();
+            }
+        }
+
+        function fireJaniceRosePetals() {
+            for (let i = 0; i < 22; i++) {
+                const petal = document.createElement('div');
+                petal.className = 'janice-petal-piece';
+                petal.textContent = '🌹';
+                petal.style.left = Math.random() * 100 + 'vw';
+                petal.style.fontSize = (14 + Math.random() * 10) + 'px';
+                petal.style.animationDelay = (Math.random() * 0.4) + 's';
+                petal.style.animationDuration = (2.2 + Math.random() * 1) + 's';
+                petal.style.setProperty('--drift', (Math.random() * 100 - 50) + 'px');
+                document.body.appendChild(petal);
+                petal.addEventListener('animationend', () => petal.remove());
+            }
         }
 
         function loadTimetableForActiveTA() {
@@ -4106,6 +4322,14 @@
             const bodyA = document.getElementById('timetable-body-a');
             const bodyB = document.getElementById('timetable-body-b');
             const headerRow = document.getElementById('timetable-header-row');
+            // Mirrors the active week onto .main-panel itself, purely for
+            // Janice's theme (see .week-b-active-panel — rose vs. crown
+            // paper texture) — .main-panel has no ancestor in common with
+            // the header row's week-active class, so this needs its own
+            // toggle. Harmless no-op for every other TA, since nothing
+            // outside .janice-theme reacts to this class.
+            const mainPanel = document.querySelector('.main-panel');
+            if (mainPanel) mainPanel.classList.toggle('week-b-active-panel', week === 'B');
 
             if (week === 'A') {
                 btnA.classList.replace('text-gray-600', 'active');
@@ -4152,6 +4376,7 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             syncPanelHeights();
+            makeJanicePanelDraggable();
             const draggables = document.querySelectorAll('.draggable-class');
             const dropZones = document.querySelectorAll('.drop-zone');
             const unassignedList = document.getElementById('unassigned-list');
@@ -5112,9 +5337,10 @@
         }
 
         function rebuildTaDatabase() {
-            // Keep existing timetables/stats/privateNotes for a TA whose id
-            // already existed, so applying edits doesn't wipe out scheduling
-            // (or Janice's private notes) already in place for them.
+            // Keep existing timetables/stats/privateNotes/privateChecklist for
+            // a TA whose id already existed, so applying edits doesn't wipe
+            // out scheduling (or Janice's private notes/checklist) already
+            // in place for them.
             const previousById = {};
             taDatabase.forEach(ta => { previousById[ta.id] = ta; });
 
@@ -5129,7 +5355,8 @@
                         skills: parseTags(ta.tags),
                         timetables: existing ? existing.timetables : { A: {}, B: {} },
                         stats: existing ? existing.stats : { absences: 0, coversProvided: 0, basePeriods: 25 },
-                        privateNotes: existing ? existing.privateNotes : undefined
+                        privateNotes: existing ? existing.privateNotes : undefined,
+                        privateChecklist: existing ? existing.privateChecklist : undefined
                     };
                 });
 
