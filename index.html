@@ -57,7 +57,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&family=Fredoka:wght@500;600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
     <style>
         /* Custom styles for drag and drop interactions and timetable layout */
         body {
@@ -430,10 +430,29 @@
             background: linear-gradient(135deg, #F0A9BC, #E3A73E);
             color: #ffffff;
             font-family: 'Fredoka', 'Poppins', sans-serif;
+            position: relative;
+            overflow: visible;
+        }
+        /* A little gold star peeking off the badge's corner — the "sheet"
+           corner star from the original design, moved onto the one persistent
+           piece of chrome her view always has, since the real app has no
+           single full-page "sheet" to pin it to. */
+        #janice-flair::after {
+            content: '⭐';
+            position: absolute;
+            top: -7px;
+            right: -6px;
+            font-size: 13px;
+            filter: drop-shadow(0 1px 1px rgba(74, 59, 71, 0.35));
+            animation: janice-star-twinkle 2.4s ease-in-out infinite;
+        }
+        @keyframes janice-star-twinkle {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.15) rotate(8deg); }
         }
         .janice-theme .main-panel {
             background:
-                radial-gradient(#f0dfd2 1px, transparent 1.3px) 0 0/20px 20px,
+                radial-gradient(#e9d4c4 1.5px, transparent 2px) 0 0/20px 20px,
                 #fdf7f2;
         }
         .janice-theme .class-title {
@@ -442,13 +461,25 @@
         .janice-theme .class-block {
             border-radius: 14px;
             box-shadow: 0 3px 8px -2px rgba(74, 59, 71, 0.18);
-            /* Deliberately no `transform` here (an earlier version rotated each
-               card a degree or two for a hand-placed-sticker look) — these
-               blocks are draggable="true" for moving/swapping placed classes,
-               and a resting-state CSS transform on a native-draggable element
-               silently kills dragstart in some browsers (observed on Safari/
-               macOS). If a "tilted sticker" look comes back, it has to live on
-               a non-draggable decorative layer, never on .class-block itself. */
+            /* isolate + a rotated ::before "backing card" (below) is how the
+               hand-placed-sticker tilt is done — never a `transform` on this
+               element itself. It's draggable="true" (moving/swapping placed
+               classes), and a resting-state transform on a native-draggable
+               element silently kills dragstart in some browsers. */
+            isolation: isolate;
+        }
+        /* The actual tilt: a same-colored card sitting behind the real
+           (perfectly upright, perfectly draggable) content, rotated a couple
+           degrees so it peeks out at the corners — the classic "stack of
+           stickers" look, without ever transforming the draggable block. */
+        .janice-theme .class-block::before {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            background-color: inherit;
+            border-radius: inherit;
+            transform: rotate(-2.5deg);
+            z-index: -1;
         }
         /* Week A = warm (rose/gold), Week B = cool (lavender/mint) — the
            same warm/cool split as the rest of the app's Week A/B distinction,
@@ -474,19 +505,16 @@
             background-color: #EFE7F9;
             border-color: #D9CBF0;
         }
-        /* A little round "sticker seal" peeking off the top-left corner,
-           marking what kind of period it is — read off the same markers the
-           app already writes (data-cover-origin for a cover shift, isDuty
-           inside the saved classData JSON for a Duty block), so nothing new
-           needs to be tracked just for this. Sits mostly outside the block's
-           own box (negative offset) rather than over its text, and is
-           non-interactive, so it never overlaps a long title or blocks a
-           click through to the Find Cover button (top-right, shown on
-           hover). */
+        /* A little round "sticker seal" marking what kind of period it is —
+           read off the same markers the app already writes (data-cover-origin
+           for a cover shift, isDuty inside the saved classData JSON for a
+           Duty block), so nothing new needs to be tracked just for this.
+           Non-interactive, and hides on hover so it's never mistaken for
+           (or sits under) the real Find Cover button that appears there. */
         .janice-theme .class-block::after {
             position: absolute;
             top: -7px;
-            left: -7px;
+            right: -7px;
             width: 18px;
             height: 18px;
             display: flex;
@@ -498,28 +526,70 @@
             border-radius: 50%;
             box-shadow: 0 1px 3px rgba(74, 59, 71, 0.25);
             pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+        .janice-theme .class-block:hover::after {
+            opacity: 0;
         }
         .janice-theme .class-block[data-cover-origin]::after { content: '🦋'; }
         .janice-theme .class-block[data-class-data*='isDuty":true']::after { content: '⭐'; }
 
+        /* The handwritten sign-off, next to the colour key under the grid. */
+        #janice-signoff {
+            font-family: 'Caveat', cursive;
+            font-size: 20px;
+            color: #E8879B;
+        }
+
         /* Confetti burst for the "🎉" cheer button — plain divs, no canvas/lib
-           needed for two dozen falling squares. */
+           needed. Pieces are fixed + pointer-events:none, so none of this
+           can ever sit between a click and whatever's underneath it. */
         .janice-confetti-piece {
             position: fixed;
-            top: -10px;
-            width: 8px;
-            height: 8px;
-            border-radius: 2px;
+            top: -12px;
             z-index: 9999;
             pointer-events: none;
-            animation: janice-confetti-fall 1.6s ease-in forwards;
+            animation: janice-confetti-fall 1.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
         }
         @keyframes janice-confetti-fall {
-            0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
-            100% { transform: translate(var(--drift, 0), 100vh) rotate(360deg); opacity: 0; }
+            0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+            80% { opacity: 1; }
+            100% { transform: translate(var(--drift, 0), 105vh) rotate(540deg) scale(0.8); opacity: 0; }
+        }
+        #janice-cheer-toast {
+            position: fixed;
+            top: 18%;
+            left: 50%;
+            transform: translate(-50%, -12px);
+            font-family: 'Fredoka', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffffff;
+            text-shadow: 0 2px 10px rgba(74, 59, 71, 0.5);
+            background: linear-gradient(135deg, #E8879B, #E3A73E);
+            padding: 12px 28px;
+            border-radius: 999px;
+            box-shadow: 0 10px 30px -6px rgba(74, 59, 71, 0.45);
+            z-index: 10000;
+            pointer-events: none;
+            opacity: 0;
+            animation: janice-toast-pop 1.8s ease forwards;
+        }
+        @keyframes janice-toast-pop {
+            0% { opacity: 0; transform: translate(-50%, 8px) scale(0.85); }
+            15% { opacity: 1; transform: translate(-50%, -12px) scale(1.05); }
+            25% { transform: translate(-50%, -12px) scale(1); }
+            80% { opacity: 1; }
+            100% { opacity: 0; transform: translate(-50%, -28px) scale(1); }
         }
         @media (prefers-reduced-motion: reduce) {
-            .janice-confetti-piece { display: none; }
+            .janice-confetti-piece, #janice-cheer-toast {
+                animation: none;
+                display: none;
+            }
+            #janice-flair::after {
+                animation: none;
+            }
         }
 
         /* Print-only timetable (built dynamically by exportTimetableToPDF) —
@@ -1020,6 +1090,9 @@
                     <span>Intervention</span>
                 </div>
             </div>
+
+            <!-- Only shown for Janice — see applyJaniceTheme -->
+            <div id="janice-signoff" class="hidden mt-3">you've got this, boss ✨</div>
 
         </main>
     </div>
@@ -3258,7 +3331,7 @@
         // running through the exact same code path as everyone else's view.
         function applyJaniceTheme(isJanice) {
             document.body.classList.toggle('janice-theme', isJanice);
-            ['janice-flair', 'janice-notes-btn', 'janice-cheer-btn'].forEach(id => {
+            ['janice-flair', 'janice-notes-btn', 'janice-cheer-btn', 'janice-signoff'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.toggle('hidden', !isJanice);
             });
@@ -3289,19 +3362,31 @@
             ta.privateNotes = value; // rides along in the normal save/undo snapshots, no extra wiring needed
         }
 
+        const JANICE_CHEER_MESSAGES = ['You\'ve got this! 🌟', 'Team MVP! 🎉', 'Boss energy! ✨', 'Keep going! 💪'];
+
         function fireJaniceCheer() {
             if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-            const colors = ['#E8879B', '#B39DDB', '#7FCBB0', '#E3A73E'];
-            for (let i = 0; i < 28; i++) {
+            const colors = ['#E8879B', '#B39DDB', '#7FCBB0', '#E3A73E', '#F0A9BC'];
+            for (let i = 0; i < 60; i++) {
                 const piece = document.createElement('div');
                 piece.className = 'janice-confetti-piece';
+                const size = 6 + Math.random() * 8; // 6-14px, mixed sizes read as more of a "burst"
+                piece.style.width = size + 'px';
+                piece.style.height = size + 'px';
+                piece.style.borderRadius = (Math.random() < 0.5 ? '50%' : '3px'); // mix of dots and squares
                 piece.style.left = Math.random() * 100 + 'vw';
                 piece.style.backgroundColor = colors[i % colors.length];
-                piece.style.animationDelay = (Math.random() * 0.3) + 's';
-                piece.style.setProperty('--drift', (Math.random() * 80 - 40) + 'px');
+                piece.style.animationDelay = (Math.random() * 0.35) + 's';
+                piece.style.setProperty('--drift', (Math.random() * 140 - 70) + 'px');
                 document.body.appendChild(piece);
                 piece.addEventListener('animationend', () => piece.remove());
             }
+
+            const toast = document.createElement('div');
+            toast.id = 'janice-cheer-toast';
+            toast.textContent = JANICE_CHEER_MESSAGES[Math.floor(Math.random() * JANICE_CHEER_MESSAGES.length)];
+            document.body.appendChild(toast);
+            toast.addEventListener('animationend', () => toast.remove());
         }
 
         function loadTimetableForActiveTA() {
