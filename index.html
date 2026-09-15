@@ -423,26 +423,6 @@
             overflow-y: auto;
         }
 
-        /* Text-size accessibility control (see applyFontScale/stepFontScale)
-           — scoped to the sidebar/timetable and the modals via CSS zoom,
-           deliberately excluding <nav>. zoom (rather than a root font-size
-           change) keeps this scoped: nav's Tailwind classes are rem-based
-           and rem always resolves against the document root regardless of
-           nesting, so a root-level change would scale nav too — and nav's
-           fixed, tightly-packed layout has no slack for that (verified: it
-           overlaps almost immediately). */
-        .tools-sidebar,
-        .main-panel,
-        #cover-modal,
-        #stats-modal,
-        #data-modal,
-        #student-timetable-modal,
-        #assign-ta-modal,
-        #compare-modal,
-        #global-search-modal {
-            zoom: var(--font-scale-zoom, 1);
-        }
-
         /* Hide scrollbar for a cleaner look */
         .tools-sidebar::-webkit-scrollbar {
             width: 6px;
@@ -944,17 +924,6 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 14l4-4-4-4m4 4H8a4 4 0 000 8h1" />
                     </svg>
                 </button>
-            </div>
-
-            <div class="w-px h-6 bg-gray-200 mx-1"></div>
-
-            <!-- Text size — a few discrete steps for anyone who finds the
-                 default text small; a per-browser preference (see initFontScale),
-                 not shared/cloud data. -->
-            <div class="flex items-center gap-0.5 border border-gray-200 rounded-md pl-1 pr-1.5 py-1" title="Text size">
-                <button id="font-scale-dec" onclick="stepFontScale(-1)" title="Decrease text size" class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 text-xs font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">A−</button>
-                <span id="font-scale-label" class="text-[10px] text-gray-400 w-8 text-center select-none">100%</span>
-                <button id="font-scale-inc" onclick="stepFontScale(1)" title="Increase text size" class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 text-sm font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">A+</button>
             </div>
 
             <div class="w-px h-6 bg-gray-200 mx-1"></div>
@@ -4495,60 +4464,15 @@
         // the grid, and Period 6 with it, clipped with no way to scroll to it.
         // Measuring both values directly in JS and setting an explicit pixel
         // height sidesteps whatever the discrepancy is, regardless of browser.
-        // Text-size accessibility control — a few discrete steps. See the
-        // .font-scale-zoom-target rule for what actually scales.
-        const FONT_SCALE_KEY = 'ta_timetable_font_scale_v1';
-        const FONT_SCALE_STEPS = [100, 112, 125, 137];
-        let fontScaleIndex = 0;
-
         function syncPanelHeights() {
             const nav = document.querySelector('nav');
             if (!nav) return;
-            const zoom = FONT_SCALE_STEPS[fontScaleIndex] / 100;
-            // .tools-sidebar/.main-panel are themselves zoomed (see
-            // .font-scale-zoom-target), so the px height assigned here is
-            // "local" to that zoomed context — divide by the zoom factor so
-            // the on-screen (real) rendered size still matches the space
-            // actually available below the (never-zoomed) navbar.
-            const available = Math.round((window.innerHeight - nav.getBoundingClientRect().height) / zoom);
+            const available = Math.round(window.innerHeight - nav.getBoundingClientRect().height);
             document.querySelectorAll('.tools-sidebar, .main-panel').forEach(el => {
                 el.style.height = available + 'px';
             });
         }
         window.addEventListener('resize', syncPanelHeights);
-
-        function applyFontScale(pct) {
-            // Applied via CSS zoom on specific containers (see
-            // .font-scale-zoom-target), not the document root: <nav>'s
-            // tightly-packed fixed layout has no slack for scaling and
-            // overlaps almost immediately under a whole-page zoom, since
-            // Tailwind's rem-based classes there would scale too (rem always
-            // resolves against the root regardless of nesting).
-            document.documentElement.style.setProperty('--font-scale-zoom', pct / 100);
-            const label = document.getElementById('font-scale-label');
-            if (label) label.textContent = pct + '%';
-            const decBtn = document.getElementById('font-scale-dec');
-            const incBtn = document.getElementById('font-scale-inc');
-            if (decBtn) decBtn.disabled = pct === FONT_SCALE_STEPS[0];
-            if (incBtn) incBtn.disabled = pct === FONT_SCALE_STEPS[FONT_SCALE_STEPS.length - 1];
-            try { localStorage.setItem(FONT_SCALE_KEY, String(pct)); } catch (e) {}
-            // The zoomed panels' rendered height changes with the text size
-            // but that doesn't fire a window 'resize' event on its own.
-            syncPanelHeights();
-        }
-
-        function stepFontScale(direction) {
-            fontScaleIndex = Math.min(FONT_SCALE_STEPS.length - 1, Math.max(0, fontScaleIndex + direction));
-            applyFontScale(FONT_SCALE_STEPS[fontScaleIndex]);
-        }
-
-        function initFontScale() {
-            let saved = 100;
-            try { saved = parseInt(localStorage.getItem(FONT_SCALE_KEY), 10) || 100; } catch (e) {}
-            const idx = FONT_SCALE_STEPS.indexOf(saved);
-            fontScaleIndex = idx === -1 ? 0 : idx;
-            applyFontScale(FONT_SCALE_STEPS[fontScaleIndex]);
-        }
 
         // Sidebar collapse — a per-browser UI preference (not shared/cloud
         // data), so a device that always keeps it tucked away stays that way.
@@ -4572,7 +4496,6 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
-            initFontScale();
             initSidebarCollapse();
             syncPanelHeights();
             makeJanicePanelDraggable();
