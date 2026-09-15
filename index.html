@@ -255,6 +255,36 @@
         .compare-density-compact .compare-cell { font-size: 0.625rem; padding: 2px 3px; }
         .compare-density-compact .compare-cell { min-height: 30px; }
 
+        /* Compare View: Janice's card gets the same rose (Week A) / sky-blue
+           (Week B) treatment as her real timetable (see the .janice-theme
+           colors above), so her card reads as "hers" at a glance even when
+           she isn't the active TA — set from renderCompareColumnHtml(),
+           independent of the .janice-theme body class. */
+        .compare-column.compare-janice-a {
+            background-color: #fdf7f2;
+            border-color: #F3C3CE;
+            border-width: 2px;
+        }
+        .compare-column.compare-janice-b {
+            background-color: #f4fbfe;
+            border-color: #B9E6F7;
+            border-width: 2px;
+        }
+        .compare-column.compare-janice-a .compare-column-title { color: #E8879B; }
+        .compare-column.compare-janice-b .compare-column-title { color: #0EA5E9; }
+        .compare-column.compare-janice-a .compare-table th,
+        .compare-column.compare-janice-a .compare-time-label {
+            background-color: #FBE4E9;
+            border-color: #F3C3CE;
+        }
+        .compare-column.compare-janice-b .compare-table th,
+        .compare-column.compare-janice-b .compare-time-label {
+            background-color: #DFF3FC;
+            border-color: #B9E6F7;
+        }
+        .compare-column.compare-janice-a .compare-cell { border-color: #F3C3CE; }
+        .compare-column.compare-janice-b .compare-cell { border-color: #B9E6F7; }
+
         /* Drag and Drop specific styles */
         .draggable-class {
             cursor: grab;
@@ -377,6 +407,26 @@
         .main-panel {
             height: calc(100vh - 4rem);
             overflow-y: auto;
+        }
+
+        /* Text-size accessibility control (see applyFontScale/stepFontScale)
+           — scoped to the sidebar/timetable and the modals via CSS zoom,
+           deliberately excluding <nav>. zoom (rather than a root font-size
+           change) keeps this scoped: nav's Tailwind classes are rem-based
+           and rem always resolves against the document root regardless of
+           nesting, so a root-level change would scale nav too — and nav's
+           fixed, tightly-packed layout has no slack for that (verified: it
+           overlaps almost immediately). */
+        .tools-sidebar,
+        .main-panel,
+        #cover-modal,
+        #stats-modal,
+        #data-modal,
+        #student-timetable-modal,
+        #assign-ta-modal,
+        #compare-modal,
+        #global-search-modal {
+            zoom: var(--font-scale-zoom, 1);
         }
 
         /* Hide scrollbar for a cleaner look */
@@ -844,6 +894,17 @@
 
             <div class="w-px h-6 bg-gray-200 mx-1"></div>
 
+            <!-- Text size — a few discrete steps for anyone who finds the
+                 default text small; a per-browser preference (see initFontScale),
+                 not shared/cloud data. -->
+            <div class="flex items-center gap-0.5 border border-gray-200 rounded-md pl-1 pr-1.5 py-1" title="Text size">
+                <button id="font-scale-dec" onclick="stepFontScale(-1)" title="Decrease text size" class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 text-xs font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">A−</button>
+                <span id="font-scale-label" class="text-[10px] text-gray-400 w-8 text-center select-none">100%</span>
+                <button id="font-scale-inc" onclick="stepFontScale(1)" title="Increase text size" class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 text-sm font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">A+</button>
+            </div>
+
+            <div class="w-px h-6 bg-gray-200 mx-1"></div>
+
             <!-- Secondary tools: icon-only with tooltips, grouped together -->
             <div class="flex items-center gap-1">
                 <button onclick="openGlobalSearchModal()" title="Search everywhere by class code, teacher, or room (Ctrl/Cmd+K)" class="flex items-center gap-1.5 px-2.5 py-2 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
@@ -910,23 +971,23 @@
          Positioned with inline left/top (not the bottom-6/right-6 Tailwind
          classes) so makeJanicePanelDraggable can move it — see that
          function for why. -->
-    <div id="janice-notes-panel" class="hidden fixed z-40 w-72 bg-white border-2 border-pink-200 rounded-2xl shadow-xl p-4" style="left: calc(100vw - 320px); top: calc(100vh - 420px);">
-        <div id="janice-notes-header" class="flex justify-between items-center mb-2 cursor-move select-none" title="Drag to move">
+    <div id="janice-notes-panel" class="hidden fixed z-40 flex flex-col bg-white border-2 border-pink-200 rounded-2xl shadow-xl p-4" style="left: calc(100vw - 320px); top: calc(100vh - 420px); width: 288px; height: 360px; min-width: 260px; min-height: 300px; max-width: 480px; max-height: 640px; resize: both; overflow: auto;">
+        <div id="janice-notes-header" class="flex justify-between items-center mb-2 cursor-move select-none shrink-0" title="Drag to move">
             <span class="text-sm font-semibold text-pink-700 flex items-center gap-1" style="font-family:'Fredoka','Poppins',sans-serif;">📝 My Notes <span class="text-[10px] text-pink-300 font-normal">⠿ drag me</span></span>
             <button onclick="toggleJaniceNotes()" class="text-gray-400 hover:text-gray-600 text-sm leading-none">✕</button>
         </div>
-        <textarea id="janice-notes-textarea" oninput="updateJaniceNotes(this.value)" rows="4" placeholder="Just for you — reminders, to-dos, anything 🌷" class="w-full text-sm border border-pink-100 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none" style="font-family:'Quicksand','Poppins',sans-serif;"></textarea>
+        <textarea id="janice-notes-textarea" oninput="updateJaniceNotes(this.value)" rows="4" placeholder="Just for you — reminders, to-dos, anything 🌷" class="w-full text-sm border border-pink-100 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none shrink-0" style="font-family:'Quicksand','Poppins',sans-serif; height: 90px;"></textarea>
 
-        <div class="mt-3 pt-3 border-t border-dashed border-pink-200">
-            <div class="text-xs font-semibold text-pink-500 mb-1.5 flex items-center gap-1">✓ Checklist</div>
-            <div class="flex gap-1 mb-2">
+        <div class="mt-3 pt-3 border-t border-dashed border-pink-200 flex-1 min-h-0 flex flex-col">
+            <div class="text-xs font-semibold text-pink-500 mb-1.5 flex items-center gap-1 shrink-0">✓ Checklist</div>
+            <div class="flex gap-1 mb-2 shrink-0">
                 <input type="text" id="janice-checklist-input" placeholder="Add a to-do…" onkeydown="if(event.key==='Enter') addJaniceChecklistItem()" class="flex-1 text-xs border border-pink-100 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pink-300">
                 <button onclick="addJaniceChecklistItem()" title="Add" class="text-sm bg-pink-100 hover:bg-pink-200 text-pink-700 rounded-lg px-2.5 font-bold transition-colors">+</button>
             </div>
-            <ul id="janice-checklist-list" class="space-y-1 max-h-32 overflow-y-auto"></ul>
+            <ul id="janice-checklist-list" class="space-y-1 flex-1 min-h-0 overflow-y-auto"></ul>
         </div>
 
-        <p class="text-[10px] text-gray-400 mt-2">Only shown in your own view — heads up though, it's saved in the same shared file as everything else, not a truly private/encrypted note.</p>
+        <p class="text-[10px] text-gray-400 mt-2 shrink-0">Only shown in your own view — heads up though, it's saved in the same shared file as everything else, not a truly private/encrypted note. Drag the bottom-right corner to resize.</p>
     </div>
 
     <!-- Main Content Area -->
@@ -4367,17 +4428,63 @@
         // the grid, and Period 6 with it, clipped with no way to scroll to it.
         // Measuring both values directly in JS and setting an explicit pixel
         // height sidesteps whatever the discrepancy is, regardless of browser.
+        // Text-size accessibility control — a few discrete steps. See the
+        // .font-scale-zoom-target rule for what actually scales.
+        const FONT_SCALE_KEY = 'ta_timetable_font_scale_v1';
+        const FONT_SCALE_STEPS = [100, 112, 125, 137];
+        let fontScaleIndex = 0;
+
         function syncPanelHeights() {
             const nav = document.querySelector('nav');
             if (!nav) return;
-            const available = Math.round(window.innerHeight - nav.getBoundingClientRect().height);
+            const zoom = FONT_SCALE_STEPS[fontScaleIndex] / 100;
+            // .tools-sidebar/.main-panel are themselves zoomed (see
+            // .font-scale-zoom-target), so the px height assigned here is
+            // "local" to that zoomed context — divide by the zoom factor so
+            // the on-screen (real) rendered size still matches the space
+            // actually available below the (never-zoomed) navbar.
+            const available = Math.round((window.innerHeight - nav.getBoundingClientRect().height) / zoom);
             document.querySelectorAll('.tools-sidebar, .main-panel').forEach(el => {
                 el.style.height = available + 'px';
             });
         }
         window.addEventListener('resize', syncPanelHeights);
 
+        function applyFontScale(pct) {
+            // Applied via CSS zoom on specific containers (see
+            // .font-scale-zoom-target), not the document root: <nav>'s
+            // tightly-packed fixed layout has no slack for scaling and
+            // overlaps almost immediately under a whole-page zoom, since
+            // Tailwind's rem-based classes there would scale too (rem always
+            // resolves against the root regardless of nesting).
+            document.documentElement.style.setProperty('--font-scale-zoom', pct / 100);
+            const label = document.getElementById('font-scale-label');
+            if (label) label.textContent = pct + '%';
+            const decBtn = document.getElementById('font-scale-dec');
+            const incBtn = document.getElementById('font-scale-inc');
+            if (decBtn) decBtn.disabled = pct === FONT_SCALE_STEPS[0];
+            if (incBtn) incBtn.disabled = pct === FONT_SCALE_STEPS[FONT_SCALE_STEPS.length - 1];
+            try { localStorage.setItem(FONT_SCALE_KEY, String(pct)); } catch (e) {}
+            // The zoomed panels' rendered height changes with the text size
+            // but that doesn't fire a window 'resize' event on its own.
+            syncPanelHeights();
+        }
+
+        function stepFontScale(direction) {
+            fontScaleIndex = Math.min(FONT_SCALE_STEPS.length - 1, Math.max(0, fontScaleIndex + direction));
+            applyFontScale(FONT_SCALE_STEPS[fontScaleIndex]);
+        }
+
+        function initFontScale() {
+            let saved = 100;
+            try { saved = parseInt(localStorage.getItem(FONT_SCALE_KEY), 10) || 100; } catch (e) {}
+            const idx = FONT_SCALE_STEPS.indexOf(saved);
+            fontScaleIndex = idx === -1 ? 0 : idx;
+            applyFontScale(FONT_SCALE_STEPS[fontScaleIndex]);
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
+            initFontScale();
             syncPanelHeights();
             makeJanicePanelDraggable();
             const draggables = document.querySelectorAll('.draggable-class');
@@ -6074,15 +6181,18 @@
             });
 
             const key = kind + ':' + id;
+            const isJanice = kind === 'ta' && id === 'janice';
+            const janiceClass = isJanice ? (week === 'A' ? ' compare-janice-a' : ' compare-janice-b') : '';
+            const janiceFlair = isJanice ? (week === 'A' ? '🌷 ' : '👑 ') : '';
             return `
-                <div class="compare-column shrink-0" data-compare-key="${escapeHtml(key)}"
+                <div class="compare-column shrink-0${janiceClass}" data-compare-key="${escapeHtml(key)}"
                      ondragover="compareDragOver(event)" ondragleave="compareDragLeave(event)" ondrop="compareDrop(event, '${key}')">
                     <div class="compare-column-title" draggable="true"
                          ondragstart="compareDragStart(event, '${key}')" ondragend="compareDragEnd(event)">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
                         </svg>
-                        <span class="truncate flex-1" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+                        <span class="truncate flex-1" title="${escapeHtml(title)}">${janiceFlair}${escapeHtml(title)}</span>
                         <button type="button" title="Remove from comparison" onmousedown="event.stopPropagation()" onclick="removeCompareCard('${key}')" class="text-gray-300 hover:text-red-500 shrink-0 cursor-pointer leading-none text-base transition-colors">&times;</button>
                     </div>
                     <table class="compare-table">
