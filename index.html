@@ -392,11 +392,59 @@
             font-size: 0.75rem;
         }
 
+        /* Text-size accessibility: a permanent +40% (no toggle). The
+           sidebar already scrolls internally without issue, so a simple
+           zoom is fine there. The main timetable grid instead adapts its
+           own row heights and font sizes to whatever vertical space is
+           actually available (see fitAdaptiveTimetable()) — a flat zoom
+           there could push periods off-screen on a shorter window; this
+           way the whole week always fits without scrolling, at any window
+           size. Deliberately excludes <nav>: its tightly-packed layout has
+           no slack for scaling (verified: it overlaps almost immediately
+           under a whole-page zoom, since nav's Tailwind classes are
+           rem-based and always resolve against the document root
+           regardless of nesting). */
+        /* The 8 row-tracks in DOM order: P1, P2, Break, P3, P4a, P4b, P5, P6 —
+           fr-based so the grid's total height (set in JS to exactly the
+           space available below the header) is always divided the same way
+           regardless of viewport size. */
+        #timetable-body-a,
+        #timetable-body-b {
+            grid-template-rows: 1fr 1fr 0.5fr 1fr 1fr 1fr 1fr 1fr;
+            overflow: hidden;
+        }
+        #timetable-body-a .timetable-cell,
+        #timetable-body-b .timetable-cell,
+        #timetable-body-a .time-label,
+        #timetable-body-b .time-label {
+            min-height: 0;
+            /* CSS Grid gives a track an automatic minimum size equal to its
+               content's natural size UNLESS the item's own overflow is
+               non-visible — without this, a track whose cell has more
+               content (e.g. the two-line time label) refuses to shrink to
+               its 1fr share, silently stealing space from neighbouring
+               tracks and breaking the even row distribution this depends on. */
+            overflow: hidden;
+        }
+        /* Font sizes inside the grid are computed from the actual rendered
+           row height (see fitAdaptiveTimetable), not a fixed rem/px value —
+           so a taller window (more room per row) reads bigger on its own. */
+        #timetable-body-a .class-title, #timetable-body-b .class-title,
+        #timetable-header-row .timetable-header {
+            font-size: var(--adaptive-cell-font, 0.8125rem) !important;
+        }
+        #timetable-body-a .class-detail, #timetable-body-b .class-detail,
+        #timetable-body-a .time-label, #timetable-body-b .time-label,
+        #timetable-body-a .time-label span, #timetable-body-b .time-label span {
+            font-size: var(--adaptive-detail-font, 0.75rem) !important;
+        }
+
         /* Tools sidebar */
         .tools-sidebar {
             height: calc(100vh - 4rem);
             overflow-y: auto;
             transition: width 0.15s ease;
+            zoom: 1.4;
         }
         /* Collapsed state (see toggleSidebar/initSidebarCollapse) — shrinks to
            a slim rail with just the re-expand button, letting .main-panel
@@ -1239,7 +1287,7 @@
             </div>
             
             <!-- Contextual Help / Status -->
-            <div class="mt-4 flex items-center gap-6 text-sm text-gray-500">
+            <div id="timetable-legend-row" class="mt-4 flex items-center gap-6 text-sm text-gray-500">
                 <div class="flex items-center gap-2">
                     <div class="w-3 h-3 bg-yellow-300 rounded-sm"></div>
                     <span>Lunch Period (Must select 4a OR 4b)</span>
@@ -1357,7 +1405,10 @@
                 <div id="data-tab-needs">
                     <div class="flex justify-between items-center mb-3">
                         <p class="text-xs text-gray-500">Fill in every class that needs TA support. Separate Tags with commas, e.g. <span class="font-mono">SEN, Math</span> — used to match a covering TA's skills.</p>
-                        <button onclick="addClassNeedRow()" class="bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-md text-xs font-medium shrink-0 ml-4">+ Add Row</button>
+                        <div class="flex gap-2 shrink-0 ml-4">
+                            <button onclick="runMisplacedClassScanAndNoteJanice()" title="Scan every TA's timetable for a class placed on a different day/period than it was originally scheduled for; findings are added to Janice's private notes" class="bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 px-3 py-1.5 rounded-md text-xs font-medium">🔍 Check Schedule</button>
+                            <button onclick="addClassNeedRow()" class="bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-md text-xs font-medium">+ Add Row</button>
+                        </div>
                     </div>
                     <table class="min-w-full text-sm">
                         <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
@@ -3116,6 +3167,10 @@
             const enteringJanice = taId === 'janice' && currentActiveTA !== 'janice';
             currentActiveTA = taId;
             loadTimetableForActiveTA();  // load the new TA's timetable
+            // Janice's sign-off line changes the height available to the
+            // grid (see fitAdaptiveTimetable) — recompute after any switch,
+            // not just when entering/leaving her specifically.
+            fitAdaptiveTimetable();
             // Only on an actual switch INTO her from someone else — not on
             // every re-render while she's already selected (undo/redo,
             // Data Setup Apply, etc. all call loadTimetableForActiveTA too,
@@ -3539,6 +3594,65 @@
             const ta = taDatabase.find(t => t.id === 'janice');
             if (!ta) return;
             ta.privateNotes = value; // rides along in the normal save/undo snapshots, no extra wiring needed
+        }
+
+        // Debug tool: a class placed on a TA's timetable carries its own
+        // originally-scheduled day/period/week in its classData (set when it
+        // was first placed from a Class Need or a student's own period —
+        // see createUnassignedCardElement / placeSingleStudentPeriod).
+        // Dragging an already-placed block to a different cell (the
+        // "move within the grid" branch below) doesn't update that
+        // metadata, so a mismatch here means it was moved to a slot other
+        // than the one it was scheduled for — this is exactly how a class
+        // ends up on the wrong day. Manually-typed and Duty entries carry no
+        // such metadata (nothing to compare against) and are skipped.
+        function scanForMisplacedClasses() {
+            const findings = [];
+            taDatabase.forEach(ta => {
+                ['A', 'B'].forEach(week => {
+                    const weekData = ta.timetables[week];
+                    if (!weekData) return;
+                    Object.keys(weekData).forEach(day => {
+                        Object.keys(weekData[day]).forEach(period => {
+                            const entry = weekData[day][period];
+                            if (!entry || !entry.classData) return;
+                            let cd;
+                            try { cd = JSON.parse(entry.classData); } catch (e) { return; }
+                            if (!cd.day || !cd.period || !cd.week) return;
+                            if (cd.week === week && cd.day === day && cd.period === period) return;
+                            findings.push({
+                                taName: taDisplayName(ta),
+                                title: cd.title || '(untitled)',
+                                actualWeek: week, actualDay: day, actualPeriod: period,
+                                expectedWeek: cd.week, expectedDay: cd.day, expectedPeriod: cd.period
+                            });
+                        });
+                    });
+                });
+            });
+            return findings;
+        }
+
+        // Runs the scan above and appends the results to Janice's private
+        // notes — never overwriting whatever she's already written there.
+        function runMisplacedClassScanAndNoteJanice() {
+            const findings = scanForMisplacedClasses();
+            const janice = taDatabase.find(t => t.id === 'janice');
+            if (janice) {
+                const timestamp = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const body = findings.length
+                    ? findings.map(f => `• ${f.title} (${f.taName}): in Week ${f.actualWeek} ${f.actualDay} P${f.actualPeriod}, should be Week ${f.expectedWeek} ${f.expectedDay} P${f.expectedPeriod}`).join('\n')
+                    : 'No misplaced classes found.';
+                const entry = `--- Schedule check (${timestamp}) ---\n${body}`;
+                janice.privateNotes = janice.privateNotes ? (janice.privateNotes + '\n\n' + entry) : entry;
+                // Keep the on-screen textarea in sync if her notes panel happens to be open right now
+                const textarea = document.getElementById('janice-notes-textarea');
+                if (textarea && currentActiveTA === 'janice') textarea.value = janice.privateNotes;
+            }
+            alert(findings.length
+                ? `Found ${findings.length} misplaced class${findings.length > 1 ? 'es' : ''} — details added to Janice's notes.`
+                : "No misplaced classes found — the schedule looks clean.");
+            return findings;
         }
 
         // Drag-to-move for the notes panel — mousedown on its header starts
@@ -4454,6 +4568,7 @@
                 bodyA.classList.add('hidden');
                 if (headerRow) headerRow.classList.replace('week-a-active', 'week-b-active');
             }
+            fitAdaptiveTimetable();
         }
 
         // Drag and Drop Logic
@@ -4468,11 +4583,57 @@
             const nav = document.querySelector('nav');
             if (!nav) return;
             const available = Math.round(window.innerHeight - nav.getBoundingClientRect().height);
-            document.querySelectorAll('.tools-sidebar, .main-panel').forEach(el => {
-                el.style.height = available + 'px';
-            });
+            // .tools-sidebar carries a permanent zoom:1.4 (see the text-size
+            // accessibility rule above) — the px height assigned to it is
+            // "local" to that zoomed context, so divide by the zoom factor
+            // here or the on-screen (real) rendered size ends up 1.4x taller
+            // than the space actually available.
+            const sidebar = document.querySelector('.tools-sidebar');
+            if (sidebar) sidebar.style.height = Math.round(available / 1.4) + 'px';
+            const mainPanel = document.querySelector('.main-panel');
+            if (mainPanel) mainPanel.style.height = available + 'px';
         }
-        window.addEventListener('resize', syncPanelHeights);
+        window.addEventListener('resize', () => { syncPanelHeights(); fitAdaptiveTimetable(); });
+
+        // Sizes the timetable grid body to exactly fill whatever vertical
+        // space is left inside .main-panel after the week-toggle row, the
+        // sticky header, the legend, and (for Janice) the sign-off — so the
+        // whole week's periods always fit without scrolling, at any window
+        // size. Font sizes are derived from the resulting row height rather
+        // than a fixed value (times 1.4 for the text-size accessibility
+        // bump), so a taller window reads bigger on its own, and text never
+        // overflows what was just computed to fit.
+        function fitAdaptiveTimetable() {
+            const mainPanel = document.querySelector('.main-panel');
+            const headerRow = document.getElementById('timetable-header-row');
+            const bodyA = document.getElementById('timetable-body-a');
+            const bodyB = document.getElementById('timetable-body-b');
+            if (!mainPanel || !headerRow || !bodyA || !bodyB) return;
+
+            const weekToggle = mainPanel.querySelector(':scope > .flex.space-x-1');
+            const legend = document.getElementById('timetable-legend-row');
+            const signoff = document.getElementById('janice-signoff');
+
+            const panelHeight = mainPanel.clientHeight; // set by syncPanelHeights
+            const paddingV = 48; // p-6 top+bottom
+            const weekToggleH = weekToggle ? weekToggle.offsetHeight + 24 : 0; // + mb-6
+            const headerH = headerRow.offsetHeight;
+            const legendH = legend ? legend.offsetHeight + 16 : 0; // + mt-4
+            const signoffH = (signoff && !signoff.classList.contains('hidden')) ? signoff.offsetHeight + 12 : 0;
+            const containerBorders = 2;
+
+            const bodyAvailable = Math.max(140, panelHeight - paddingV - weekToggleH - headerH - legendH - signoffH - containerBorders);
+            bodyA.style.height = bodyAvailable + 'px';
+            bodyB.style.height = bodyAvailable + 'px';
+
+            // 8 row-tracks weighted 1,1,0.5,1,1,1,1,1 (P1,P2,Break,P3,P4a,P4b,P5,P6) = 7.5 total
+            const unitPx = bodyAvailable / 7.5;
+            const scale = 1.4;
+            const cellFontPx = Math.max(9, Math.min(unitPx * 0.16 * scale, unitPx * 0.34, 24));
+            const detailFontPx = Math.max(8, Math.min(unitPx * 0.13 * scale, unitPx * 0.26, 18));
+            document.documentElement.style.setProperty('--adaptive-cell-font', cellFontPx.toFixed(1) + 'px');
+            document.documentElement.style.setProperty('--adaptive-detail-font', detailFontPx.toFixed(1) + 'px');
+        }
 
         // Sidebar collapse — a per-browser UI preference (not shared/cloud
         // data), so a device that always keeps it tucked away stays that way.
@@ -4498,6 +4659,7 @@
         document.addEventListener('DOMContentLoaded', async () => {
             initSidebarCollapse();
             syncPanelHeights();
+            fitAdaptiveTimetable();
             makeJanicePanelDraggable();
             const draggables = document.querySelectorAll('.draggable-class');
             const dropZones = document.querySelectorAll('.drop-zone');
@@ -4526,9 +4688,10 @@
             rebuildStudentSelector();
             loadTimetableForActiveTA(); // render the default TA's grid (adds the "+ Add class" hints to empty cells)
             syncPanelHeights();
+            fitAdaptiveTimetable();
             // Web fonts finishing their swap in can nudge the navbar's rendered
             // height by a pixel or two after this handler already ran once.
-            window.addEventListener('load', syncPanelHeights);
+            window.addEventListener('load', () => { syncPanelHeights(); fitAdaptiveTimetable(); });
 
             // High Priority / Standard Needs are two independent drop targets:
             // whichever zone a card is dropped into, it stays there — never auto-moved elsewhere.
@@ -4616,6 +4779,19 @@
                         if (draggedCd.week && zone.dataset.week && draggedCd.week !== zone.dataset.week) {
                             alert('This class is scheduled for Week ' + draggedCd.week + ' — it can\'t be placed in a Week ' + zone.dataset.week + ' slot.');
                             return;
+                        }
+
+                        // Same idea as the week check above, but a heads-up rather than a
+                        // hard block — a class dragged to a different day/period than it
+                        // was originally scheduled for is often a genuine mistake (this is
+                        // exactly how a class ends up on the wrong day), but sometimes a
+                        // deliberate reschedule, so it's allowed through with a warning
+                        // rather than bounced back like the Week mismatch above.
+                        if (draggedCd.day && draggedCd.period && zone.dataset.day && zone.dataset.period &&
+                            (draggedCd.day !== zone.dataset.day || draggedCd.period !== zone.dataset.period)) {
+                            alert('Heads up: "' + (draggedCd.title || 'This class') + '" was originally scheduled for ' +
+                                draggedCd.day + ' Period ' + draggedCd.period + ', but you\'re placing it in ' +
+                                zone.dataset.day + ' Period ' + zone.dataset.period + '.');
                         }
 
                         // Dragging a specific student's period onto a TA — check for a
