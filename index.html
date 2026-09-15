@@ -57,7 +57,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         /* Custom styles for drag and drop interactions and timetable layout */
         body {
@@ -416,6 +416,113 @@
         .week-a-active { border-top: 3px solid #0ea5e9; }
         .week-b-active { border-top: 3px solid #a855f7; }
 
+        /* ---- Janice's personal theme ----
+           Toggled purely by applyJaniceTheme() adding/removing one class on
+           <body> when she's the selected TA — every rule below is scoped
+           under .janice-theme and only ever changes color/shape/decoration
+           on the SAME elements everyone else's view uses (.class-block,
+           .timetable-cell, etc). Nothing here changes what an element is,
+           adds new interactive elements, or touches z-index/pointer-events,
+           so Find Cover, cancel, drag-and-drop and undo/redo all keep running
+           through the exact same code as normal — this is a re-skin, not a
+           parallel view. */
+        #janice-flair {
+            background: linear-gradient(135deg, #F0A9BC, #E3A73E);
+            color: #ffffff;
+            font-family: 'Fredoka', 'Poppins', sans-serif;
+        }
+        .janice-theme .main-panel {
+            background:
+                radial-gradient(#f0dfd2 1px, transparent 1.3px) 0 0/20px 20px,
+                #fdf7f2;
+        }
+        .janice-theme .class-title {
+            font-family: 'Fredoka', 'Poppins', sans-serif;
+        }
+        .janice-theme .class-block {
+            border-radius: 14px;
+            box-shadow: 0 3px 8px -2px rgba(74, 59, 71, 0.18);
+        }
+        /* A gentle hand-placed-sticker feel — alternating tilt, undone on
+           hover/drag so it never fights the pointer while dragging. */
+        .janice-theme .class-block:nth-of-type(odd) { transform: rotate(-0.8deg); }
+        .janice-theme .class-block:nth-of-type(even) { transform: rotate(0.8deg); }
+        .janice-theme .class-block:hover,
+        .janice-theme .class-block.is-dragging {
+            transform: none;
+        }
+        /* Week A = warm (rose/gold), Week B = cool (lavender/mint) — the
+           same warm/cool split as the rest of the app's Week A/B distinction,
+           carried into her sticker palette instead of the blue/purple used
+           everywhere else. */
+        .janice-theme #timetable-body-a .class-block {
+            background-color: #FBE4E9;
+            border-color: #F3C3CE;
+            border-left-color: #E8879B;
+        }
+        .janice-theme #timetable-body-b .class-block {
+            background-color: #EFE7F9;
+            border-color: #D9CBF0;
+            border-left-color: #B39DDB;
+        }
+        .janice-theme #timetable-body-a .time-label,
+        .janice-theme .week-a-active .timetable-header {
+            background-color: #FBE4E9;
+            border-color: #F3C3CE;
+        }
+        .janice-theme #timetable-body-b .time-label,
+        .janice-theme .week-b-active .timetable-header {
+            background-color: #EFE7F9;
+            border-color: #D9CBF0;
+        }
+        /* A little round "sticker seal" peeking off the top-left corner,
+           marking what kind of period it is — read off the same markers the
+           app already writes (data-cover-origin for a cover shift, isDuty
+           inside the saved classData JSON for a Duty block), so nothing new
+           needs to be tracked just for this. Sits mostly outside the block's
+           own box (negative offset) rather than over its text, and is
+           non-interactive, so it never overlaps a long title or blocks a
+           click through to the Find Cover button (top-right, shown on
+           hover). */
+        .janice-theme .class-block::after {
+            position: absolute;
+            top: -7px;
+            left: -7px;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            content: '🌸';
+            background: #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(74, 59, 71, 0.25);
+            pointer-events: none;
+        }
+        .janice-theme .class-block[data-cover-origin]::after { content: '🦋'; }
+        .janice-theme .class-block[data-class-data*='isDuty":true']::after { content: '⭐'; }
+
+        /* Confetti burst for the "🎉" cheer button — plain divs, no canvas/lib
+           needed for two dozen falling squares. */
+        .janice-confetti-piece {
+            position: fixed;
+            top: -10px;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            z-index: 9999;
+            pointer-events: none;
+            animation: janice-confetti-fall 1.6s ease-in forwards;
+        }
+        @keyframes janice-confetti-fall {
+            0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+            100% { transform: translate(var(--drift, 0), 100vh) rotate(360deg); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .janice-confetti-piece { display: none; }
+        }
+
         /* Print-only timetable (built dynamically by exportTimetableToPDF) —
            hidden on screen, shown only inside the print dialog */
         #printable-timetable {
@@ -584,6 +691,10 @@
                     <option value="sharena">Sharena</option>
                     <option value="umaira">Umaira</option>
                 </select>
+                <!-- Only shown when Janice is the selected TA (see applyJaniceTheme) -->
+                <span id="janice-flair" class="hidden items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full">🌷 Boss Mode</span>
+                <button id="janice-notes-btn" onclick="toggleJaniceNotes()" title="Your private notes — only shown in your own view" class="hidden items-center justify-center w-7 h-7 rounded-full text-sm hover:bg-pink-100 transition-colors">📝</button>
+                <button id="janice-cheer-btn" onclick="fireJaniceCheer()" title="Treat yourself" class="hidden items-center justify-center w-7 h-7 rounded-full text-sm hover:bg-pink-100 transition-colors">🎉</button>
             </div>
 
             <div class="w-px h-6 bg-gray-200 mx-1"></div>
@@ -660,6 +771,21 @@
     <!-- Hover roster popover — see showClassRosterTooltip/hideClassRosterTooltip.
          Positioned in JS on mouseenter of a placed class-block. -->
     <div id="class-roster-tooltip" class="hidden fixed z-40 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 max-w-[220px] max-h-56 overflow-y-auto pointer-events-none"></div>
+
+    <!-- Janice's private notes — only ever opened/shown while she's the
+         selected TA (see toggleJaniceNotes/applyJaniceTheme). Stored as
+         ta.privateNotes, an optional field that rides along in the same
+         shared save file as everything else — "private" here means "not
+         shown in anyone else's view", not a real access-controlled secret,
+         since this app has no per-user login. -->
+    <div id="janice-notes-panel" class="hidden fixed bottom-6 right-6 z-40 w-72 bg-white border border-pink-200 rounded-2xl shadow-xl p-4">
+        <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-semibold text-pink-700" style="font-family:'Fredoka','Poppins',sans-serif;">📝 My Notes</span>
+            <button onclick="toggleJaniceNotes()" class="text-gray-400 hover:text-gray-600 text-sm leading-none">✕</button>
+        </div>
+        <textarea id="janice-notes-textarea" oninput="updateJaniceNotes(this.value)" rows="6" placeholder="Just for you — reminders, to-dos, anything." class="w-full text-sm border border-pink-100 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none"></textarea>
+        <p class="text-[10px] text-gray-400 mt-2">Only shown in your own view — heads up though, it's saved in the same shared file as everything else, not a truly private/encrypted note.</p>
+    </div>
 
     <!-- Main Content Area -->
     <div class="flex flex-1 overflow-hidden min-h-0">
@@ -3125,9 +3251,65 @@
         }
 
         // Render the given TA's timetable into the on-screen cells
+        // A personal, purely decorative re-skin shown only while Janice is the
+        // selected TA — a "planner sticker" theme (see the .janice-theme rules
+        // in <style>). It only ever toggles a class + shows/hides a badge; it
+        // never touches which elements exist or how they're bound, so every
+        // interaction (Find Cover, cancel, drag-and-drop, undo/redo) keeps
+        // running through the exact same code path as everyone else's view.
+        function applyJaniceTheme(isJanice) {
+            document.body.classList.toggle('janice-theme', isJanice);
+            ['janice-flair', 'janice-notes-btn', 'janice-cheer-btn'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', !isJanice);
+            });
+            if (!isJanice) {
+                // Don't leave her notes open hanging over someone else's screen
+                // after switching away from her.
+                const panel = document.getElementById('janice-notes-panel');
+                if (panel) panel.classList.add('hidden');
+            }
+        }
+
+        // ---- Two small extras shown only while Janice is selected ----
+
+        function toggleJaniceNotes() {
+            const panel = document.getElementById('janice-notes-panel');
+            if (!panel) return;
+            const opening = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden');
+            if (opening) {
+                const ta = taDatabase.find(t => t.id === 'janice');
+                document.getElementById('janice-notes-textarea').value = (ta && ta.privateNotes) || '';
+            }
+        }
+
+        function updateJaniceNotes(value) {
+            const ta = taDatabase.find(t => t.id === 'janice');
+            if (!ta) return;
+            ta.privateNotes = value; // rides along in the normal save/undo snapshots, no extra wiring needed
+        }
+
+        function fireJaniceCheer() {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const colors = ['#E8879B', '#B39DDB', '#7FCBB0', '#E3A73E'];
+            for (let i = 0; i < 28; i++) {
+                const piece = document.createElement('div');
+                piece.className = 'janice-confetti-piece';
+                piece.style.left = Math.random() * 100 + 'vw';
+                piece.style.backgroundColor = colors[i % colors.length];
+                piece.style.animationDelay = (Math.random() * 0.3) + 's';
+                piece.style.setProperty('--drift', (Math.random() * 80 - 40) + 'px');
+                document.body.appendChild(piece);
+                piece.addEventListener('animationend', () => piece.remove());
+            }
+        }
+
         function loadTimetableForActiveTA() {
             const ta = taDatabase.find(t => t.id === currentActiveTA);
             if (!ta) return;
+
+            applyJaniceTheme(ta.id === 'janice');
 
             ['A', 'B'].forEach(week => {
                 const body = document.getElementById(`timetable-body-${week.toLowerCase()}`);
@@ -4842,8 +5024,9 @@
         }
 
         function rebuildTaDatabase() {
-            // Keep existing timetables/stats for a TA whose id already existed,
-            // so applying edits doesn't wipe out scheduling already done for them.
+            // Keep existing timetables/stats/privateNotes for a TA whose id
+            // already existed, so applying edits doesn't wipe out scheduling
+            // (or Janice's private notes) already in place for them.
             const previousById = {};
             taDatabase.forEach(ta => { previousById[ta.id] = ta; });
 
@@ -4857,7 +5040,8 @@
                         emoji: (ta.emoji || '').trim(),
                         skills: parseTags(ta.tags),
                         timetables: existing ? existing.timetables : { A: {}, B: {} },
-                        stats: existing ? existing.stats : { absences: 0, coversProvided: 0, basePeriods: 25 }
+                        stats: existing ? existing.stats : { absences: 0, coversProvided: 0, basePeriods: 25 },
+                        privateNotes: existing ? existing.privateNotes : undefined
                     };
                 });
 
