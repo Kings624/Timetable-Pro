@@ -57,20 +57,45 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
     <style>
         /* Custom styles for drag and drop interactions and timetable layout */
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background-color: #f3f4f6; /* Tailwind gray-100 */
+            background: linear-gradient(180deg, #fdf2f8 0%, #f5f3ff 45%, #f3f4f6 100%) fixed; /* a soft
+                blush-to-lavender wash instead of flat gray — gentle, not distracting behind
+                the white cards/grid that sit on top of it all day */
             -webkit-font-smoothing: antialiased;
             text-rendering: optimizeLegibility;
+        }
+
+        /* A second, rounder display face for headings/titles — Inter stays the
+           workhorse everywhere numbers and dense data need to line up, Poppins
+           adds a warmer, more distinct voice to headings only. */
+        h1, h2, h3, .class-title, .compare-column-title, .print-title {
+            font-family: 'Poppins', 'Inter', -apple-system, sans-serif;
         }
 
         /* Inter's tabular figures keep times/periods lined up in columns
            instead of jittering as digit widths vary. */
         .time-label, .timetable-cell, .compare-cell, select, input {
             font-variant-numeric: tabular-nums;
+        }
+
+        /* Softer, more rounded, gently-animated feel across every toolbar/nav
+           button — rounded corners + a little life on hover/click rather than
+           flat, static rectangles. (Cards like .class-block/.compare-column
+           get their own border-radius bump further down, next to their other
+           styling, so it isn't split across two places in this file.) */
+        nav button {
+            border-radius: 12px;
+            transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+        nav button:hover {
+            transform: translateY(-1px);
+        }
+        nav button:active {
+            transform: translateY(0) scale(0.96);
         }
         
         .timetable-grid {
@@ -127,7 +152,7 @@
             width: 300px;
             background-color: white;
             border: 1px solid #e5e7eb;
-            border-radius: 0.5rem;
+            border-radius: 0.85rem;
             box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
             padding: 0.75rem;
             transition: box-shadow 0.15s, opacity 0.15s;
@@ -270,7 +295,7 @@
             background-color: #eff6ff; /* Tailwind blue-50 */
             border: 1px solid #bfdbfe; /* Tailwind blue-200 */
             border-left: 4px solid #3b82f6; /* Tailwind blue-500 */
-            border-radius: 4px;
+            border-radius: 10px;
             padding: 0.25rem 0.5rem;
             margin-bottom: 0.25rem;
             font-size: 0.8125rem;
@@ -359,12 +384,17 @@
            unrelated tab groups (Data Setup, etc.) that have nothing to do with
            weeks. */
         #btn-week-a.active, #student-grid-btn-a.active, #student-modal-week-a.active, #compare-week-a.active {
-            border-bottom-color: #2563eb; /* blue-600 */
-            color: #2563eb;
+            background-color: #0ea5e9; /* sky-500 — a solid fill reads far more clearly at a
+                                           glance than a thin border ever could */
+            color: #ffffff;
+            border-bottom-color: transparent;
+            box-shadow: 0 2px 6px rgba(14, 165, 233, 0.35);
         }
         #btn-week-b.active, #student-grid-btn-b.active, #student-modal-week-b.active, #compare-week-b.active {
-            border-bottom-color: #9333ea; /* purple-600 */
-            color: #9333ea;
+            background-color: #a855f7; /* purple-500 */
+            color: #ffffff;
+            border-bottom-color: transparent;
+            box-shadow: 0 2px 6px rgba(168, 85, 247, 0.35);
         }
 
         /* Ambient tint on the main grid's header row and time-label column so
@@ -373,11 +403,18 @@
            visible at once), so it's tinted via a class toggled in toggleWeek()
            rather than an #timetable-body-a/b ancestor scope. */
         #timetable-body-a .time-label, .week-a-active .timetable-header {
-            background-color: #eff6ff; /* blue-50 */
+            background-color: #dbeafe; /* blue-100 — deeper than the old -50 tint, which
+                                           read as barely-there next to Week B's */
+            border-color: #93c5fd;
         }
         #timetable-body-b .time-label, .week-b-active .timetable-header {
-            background-color: #faf5ff; /* purple-50 */
+            background-color: #ede9fe; /* violet-100 */
+            border-color: #c4b5fd;
         }
+        /* A solid top stripe on the sticky header row — visible even scrolled
+           mid-grid, where the tab buttons themselves are long out of view. */
+        .week-a-active { border-top: 3px solid #0ea5e9; }
+        .week-b-active { border-top: 3px solid #a855f7; }
 
         /* Print-only timetable (built dynamically by exportTimetableToPDF) —
            hidden on screen, shown only inside the print dialog */
@@ -392,44 +429,116 @@
             #printable-timetable {
                 display: block !important;
             }
+            @page {
+                size: landscape;
+                margin: 1.1cm;
+            }
+            .print-ta-sheet {
+                font-family: 'Poppins', 'Inter', -apple-system, sans-serif;
+            }
+            /* One sheet per TA in batch export — every sheet but the last is
+               followed by one of these to force a fresh page. */
+            .print-page-break {
+                page-break-after: always;
+                break-after: page;
+            }
+            .print-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+                border-bottom: 3px solid #ec4899;
+                padding-bottom: 8px;
+                margin-bottom: 14px;
+            }
             .print-header h1 {
-                font-size: 20px;
-                margin-bottom: 2px;
+                font-size: 22px;
+                font-weight: 700;
+                color: #831843;
+                margin: 0;
+            }
+            .print-subtitle {
+                font-size: 11px;
+                color: #9d174d;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                margin-top: 2px;
             }
             .print-date {
                 font-size: 11px;
-                color: #666;
+                color: #6b7280;
+            }
+            .print-week-band {
                 margin-bottom: 16px;
+                page-break-inside: avoid;
             }
             .print-week-title {
-                font-size: 15px;
-                margin: 18px 0 6px;
+                display: inline-block;
+                font-size: 13px;
+                font-weight: 700;
+                padding: 3px 14px;
+                border-radius: 999px;
+                margin: 0 0 8px;
             }
+            .print-week-a .print-week-title { background: #dbeafe; color: #1e40af; }
+            .print-week-b .print-week-title { background: #f3e8ff; color: #6b21a8; }
             .print-table {
                 width: 100%;
                 border-collapse: collapse;
-                margin-bottom: 16px;
                 font-size: 10px;
                 page-break-inside: avoid;
             }
+            .print-week-a .print-table th { background: #eff6ff; }
+            .print-week-b .print-table th { background: #faf5ff; }
             .print-table th, .print-table td {
-                border: 1px solid #999;
-                padding: 4px 6px;
+                border: 1px solid #d1d5db;
+                padding: 5px 6px;
                 text-align: left;
                 vertical-align: top;
+            }
+            .print-table tbody tr:nth-child(even) .print-cell {
+                background: #fafafa;
             }
             .print-period-label {
                 white-space: nowrap;
                 font-weight: 600;
-                width: 70px;
+                width: 68px;
+                color: #374151;
+            }
+            .print-time {
+                font-weight: 400;
+                color: #9ca3af;
+                font-size: 9px;
+            }
+            .print-cell-empty {
+                background: repeating-linear-gradient(45deg, #fafafa, #fafafa 6px, #f5f5f5 6px, #f5f5f5 12px);
+            }
+            .print-title-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 4px;
             }
             .print-title {
                 font-weight: 600;
                 color: #1e3a8a;
             }
             .print-detail {
-                color: #444;
+                color: #4b5563;
+                margin-top: 2px;
             }
+            .print-badge {
+                font-size: 8px;
+                font-weight: 700;
+                padding: 1px 5px;
+                border-radius: 999px;
+                white-space: nowrap;
+                text-transform: uppercase;
+                flex-shrink: 0;
+            }
+            .print-badge-cover { background: #d1fae5; color: #065f46; }
+            .print-badge-duty { background: #ede9fe; color: #5b21b6; }
+            .print-cell-cover { background: #f0fdf4; }
+            .print-cell-duty { background: #faf5ff; }
         }
     </style>
 </head>
@@ -442,7 +551,8 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             <h1 class="text-lg font-bold text-gray-900 tracking-tight whitespace-nowrap hidden lg:block">TA Timetable Manager</h1>
-            <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap hidden xl:inline-block">New Academic Year</span>
+            <!-- Update by hand at the start of each UK school year/term (Autumn/Spring/Summer). -->
+            <span class="bg-pink-100 text-pink-800 text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap hidden xl:inline-block">Autumn Term 2026</span>
             <button onclick="refreshFromCloud()" title="Click to check for updates from the shared cloud data" class="flex items-center gap-1.5 ml-1 pl-3 border-l border-gray-200 hover:bg-gray-50 rounded-r-md py-1 pr-2 transition-colors">
                 <span id="connection-status-dot" class="inline-block w-2.5 h-2.5 rounded-full bg-gray-300 shrink-0"></span>
                 <span id="connection-status-label" class="text-xs text-gray-500 whitespace-nowrap">Local only</span>
@@ -509,6 +619,12 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <span class="hidden xl:inline text-xs font-medium">Export PDF</span>
+                </button>
+                <button onclick="exportAllTimetablesToPDF()" title="Export every TA's timetable at once (one page each) — for printing the whole staff's schedules in one go" class="flex items-center gap-1.5 px-2.5 py-2 rounded-md border border-transparent hover:bg-pink-50 hover:border-pink-200 text-gray-600 hover:text-pink-700 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h6a2 2 0 012 2v6m-10 0a2 2 0 002 2h6a2 2 0 002-2m-10 0H7a2 2 0 01-2-2v-2a2 2 0 012-2m10 6h2a2 2 0 002-2v-2a2 2 0 00-2-2M9 9V7a2 2 0 012-2h2a2 2 0 012 2v2" />
+                    </svg>
+                    <span class="hidden xl:inline text-xs font-medium">Export All</span>
                 </button>
                 <button onclick="openCompareModal()" title="Compare View — line several timetables up side by side" class="flex items-center gap-1.5 px-2.5 py-2 rounded-md border border-transparent hover:bg-gray-100 hover:border-gray-300 text-gray-600 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -614,8 +730,8 @@
             
             <!-- Week Toggle -->
             <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg mb-6 self-center">
-                <button id="btn-week-a" class="tab-btn active bg-white shadow px-6 py-1.5 rounded-md text-sm font-medium transition-all" onclick="toggleWeek('A')">Week A</button>
-                <button id="btn-week-b" class="tab-btn px-6 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-all" onclick="toggleWeek('B')">Week B</button>
+                <button id="btn-week-a" class="tab-btn active bg-white shadow px-6 py-1.5 rounded-md text-sm font-medium transition-all" onclick="toggleWeek('A')">☀️ Week A</button>
+                <button id="btn-week-b" class="tab-btn px-6 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-all" onclick="toggleWeek('B')">🌙 Week B</button>
             </div>
 
             <!-- Timetable Container -->
@@ -905,6 +1021,7 @@
                     <table class="min-w-full text-sm">
                         <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
                             <tr>
+                                <th class="px-2 py-2 text-left" title="Optional — shown before this TA's name everywhere">Emoji</th>
                                 <th class="px-2 py-2 text-left">Name</th>
                                 <th class="px-2 py-2 text-left">Tags</th>
                                 <th class="px-2 py-2"></th>
@@ -940,8 +1057,8 @@
                         <div class="flex justify-between items-center mb-3">
                             <button onclick="closeStudentGrid()" class="text-sm text-blue-600 hover:underline">← Back to Student List</button>
                             <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg">
-                                <button id="student-grid-btn-a" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium" onclick="switchStudentGridWeek('A')">Week A</button>
-                                <button id="student-grid-btn-b" class="tab-btn px-4 py-1 rounded-md text-xs font-medium text-gray-600" onclick="switchStudentGridWeek('B')">Week B</button>
+                                <button id="student-grid-btn-a" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium" onclick="switchStudentGridWeek('A')">☀️ Week A</button>
+                                <button id="student-grid-btn-b" class="tab-btn px-4 py-1 rounded-md text-xs font-medium text-gray-600" onclick="switchStudentGridWeek('B')">🌙 Week B</button>
                             </div>
                         </div>
                         <h4 id="student-grid-title" class="text-sm font-semibold text-gray-700 mb-2"></h4>
@@ -1001,8 +1118,8 @@
             <div class="px-6 pt-4 flex items-center justify-between shrink-0">
                 <p class="text-xs text-gray-500">Click a period to assign or change which TA is with this student.</p>
                 <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg">
-                    <button id="student-modal-week-a" onclick="setStudentModalWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">Week A</button>
-                    <button id="student-modal-week-b" onclick="setStudentModalWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">Week B</button>
+                    <button id="student-modal-week-a" onclick="setStudentModalWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">☀️ Week A</button>
+                    <button id="student-modal-week-b" onclick="setStudentModalWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">🌙 Week B</button>
                 </div>
             </div>
             <div class="p-6 overflow-auto">
@@ -1063,11 +1180,26 @@
             </div>
             <div class="px-6 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3 shrink-0 bg-gray-50">
                 <div class="flex items-center gap-1 bg-gray-200 p-1 rounded-lg shrink-0">
-                    <button id="compare-week-a" onclick="setCompareWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">Week A</button>
-                    <button id="compare-week-b" onclick="setCompareWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">Week B</button>
+                    <button id="compare-week-a" onclick="setCompareWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">☀️ Week A</button>
+                    <button id="compare-week-b" onclick="setCompareWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">🌙 Week B</button>
                 </div>
                 <div class="text-xs text-gray-500 shrink-0">Line up:</div>
                 <div id="compare-picker-list" class="flex flex-wrap gap-1.5 max-w-[34rem]"></div>
+                <div class="relative shrink-0">
+                    <input type="text" id="compare-student-search" placeholder="🔍 Add any student…" autocomplete="off"
+                        oninput="handleCompareStudentSearch(this.value)"
+                        onfocus="handleCompareStudentSearch(this.value)"
+                        onblur="setTimeout(hideCompareStudentSearchResults, 150)"
+                        class="text-xs border border-gray-300 rounded-full px-3 py-1.5 w-40 focus:w-56 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-pink-300 focus:border-pink-300">
+                    <div id="compare-student-search-results" class="hidden absolute z-20 top-full mt-1 left-0 w-56 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto"></div>
+                </div>
+                <button onclick="undoCompareChange()" id="compare-undo-btn" title="Undo last Compare View change" disabled
+                    class="text-xs px-2.5 py-1.5 rounded-full border border-gray-300 text-gray-400 cursor-not-allowed transition-colors flex items-center gap-1 shrink-0 ml-auto">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4-4 4-4m-4 4h11a4 4 0 010 8h-1" />
+                    </svg>
+                    Undo
+                </button>
             </div>
             <div class="p-6 overflow-auto flex-1">
                 <div id="compare-grid-wrapper" class="flex gap-4 items-start"></div>
@@ -1131,6 +1263,15 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }
+
+        // Optional per-TA emoji (e.g. 🌟 to mark someone newly joined) — set in
+        // Data Setup's TA List tab, stored as ta.emoji, absent/empty for every
+        // TA that hasn't been given one. Wherever a TA's name is shown to a
+        // user, run it through this instead of using ta.name directly.
+        function taDisplayName(ta) {
+            if (!ta) return '';
+            return (ta.emoji ? ta.emoji + ' ' : '') + ta.name;
         }
 
         // ---- Persistence: two layers.
@@ -1389,6 +1530,7 @@
             document.getElementById('unassigned-standard').innerHTML = '';
             loadTimetableForActiveTA();
             initCoverButtons();
+            updateUnassignedFooterCount();
         }
 
         // Rebuild the navbar TA <select> from whatever is actually in taDatabase
@@ -1402,7 +1544,7 @@
             // data, or Data Setup changes) doesn't silently revert to whatever
             // order taDatabase itself happens to be in.
             const sorted = [...taDatabase].sort((a, b) => a.name.localeCompare(b.name));
-            selector.innerHTML = sorted.map(ta => `<option value="${escapeHtml(ta.id)}">${escapeHtml(ta.name)}</option>`).join('');
+            selector.innerHTML = sorted.map(ta => `<option value="${escapeHtml(ta.id)}">${escapeHtml(taDisplayName(ta))}</option>`).join('');
             if (taDatabase.find(ta => ta.id === currentActiveTA)) {
                 selector.value = currentActiveTA;
             } else if (taDatabase.length) {
@@ -2625,6 +2767,7 @@
                     }
                 });
             });
+            updateUnassignedFooterCount();
         }
 
         // Scan every TA's saved timetable for an entry whose classData satisfies
@@ -2857,8 +3000,8 @@
                 const current = findTaForStudentPeriod(sib.id, week, day, period);
                 if (current && current.ta.id !== taId) {
                     const proceed = confirm(
-                        `${sib.name} is in this exact class (same room, same time) and already has ${current.ta.name} assigned there.\n\n` +
-                        `A room only needs one TA — continuing will replace ${current.ta.name} with this TA for everyone in this class, not add a second one. Continue anyway?`
+                        `${sib.name} is in this exact class (same room, same time) and already has ${taDisplayName(current.ta)} assigned there.\n\n` +
+                        `A room only needs one TA — continuing will replace ${taDisplayName(current.ta)} with this TA for everyone in this class, not add a second one. Continue anyway?`
                     );
                     if (!proceed) return false;
                 }
@@ -3692,7 +3835,25 @@
         }
 
         // Drag and Drop Logic
+        // The sidebar/main-panel CSS height (calc(100vh - 4rem)) assumes the navbar
+        // is always exactly 4rem tall and that 100vh is trustworthy — on some Mac
+        // browsers (notably Safari, where vh and the navbar's rendered height can
+        // both be a few pixels off from that assumption) this left the bottom of
+        // the grid, and Period 6 with it, clipped with no way to scroll to it.
+        // Measuring both values directly in JS and setting an explicit pixel
+        // height sidesteps whatever the discrepancy is, regardless of browser.
+        function syncPanelHeights() {
+            const nav = document.querySelector('nav');
+            if (!nav) return;
+            const available = Math.round(window.innerHeight - nav.getBoundingClientRect().height);
+            document.querySelectorAll('.tools-sidebar, .main-panel').forEach(el => {
+                el.style.height = available + 'px';
+            });
+        }
+        window.addEventListener('resize', syncPanelHeights);
+
         document.addEventListener('DOMContentLoaded', async () => {
+            syncPanelHeights();
             const draggables = document.querySelectorAll('.draggable-class');
             const dropZones = document.querySelectorAll('.drop-zone');
             const unassignedList = document.getElementById('unassigned-list');
@@ -3719,6 +3880,10 @@
             initCoverButtons();
             rebuildStudentSelector();
             loadTimetableForActiveTA(); // render the default TA's grid (adds the "+ Add class" hints to empty cells)
+            syncPanelHeights();
+            // Web fonts finishing their swap in can nudge the navbar's rendered
+            // height by a pixel or two after this handler already ran once.
+            window.addEventListener('load', syncPanelHeights);
 
             // High Priority / Standard Needs are two independent drop targets:
             // whichever zone a card is dropped into, it stays there — never auto-moved elsewhere.
@@ -3898,39 +4063,56 @@
 
         function printableCellHtml(ta, week, day, period) {
             const entry = ta.timetables[week] && ta.timetables[week][day] && ta.timetables[week][day][period];
-            if (!entry) return '<td class="print-cell"></td>';
+            if (!entry) return '<td class="print-cell print-cell-empty"></td>';
             let classData = {};
             try { classData = JSON.parse(entry.classData || '{}'); } catch (e) { classData = {}; }
             const title = classData.title || '';
             const teacher = classData.teacher || '';
             const room = classData.room || '';
-            if (!title) return '<td class="print-cell"></td>';
-            return `<td class="print-cell">
-                <div class="print-title">${escapeHtml(title)}</div>
-                <div class="print-detail">${escapeHtml(teacher)}${teacher && room ? ' &middot; ' : ''}${escapeHtml(room)}</div>
+            if (!title) return '<td class="print-cell print-cell-empty"></td>';
+
+            // A cover entry carries this marker on its saved html (see the cover-accept
+            // handler above) — surface it in print too, so a covering TA's paper copy
+            // makes clear which periods are a one-off cover, not their normal slot.
+            const isCovering = !!(entry.html && entry.html.includes('data-cover-origin'));
+            const isDuty = !!classData.isDuty;
+            const badge = isCovering
+                ? '<span class="print-badge print-badge-cover">Cover</span>'
+                : (isDuty ? '<span class="print-badge print-badge-duty">Duty</span>' : '');
+            const detailParts = [teacher, room].filter(Boolean);
+            const cellClass = 'print-cell' + (isCovering ? ' print-cell-cover' : '') + (isDuty ? ' print-cell-duty' : '');
+
+            return `<td class="${cellClass}">
+                <div class="print-title-row"><span class="print-title">${escapeHtml(title)}</span>${badge}</div>
+                ${detailParts.length ? `<div class="print-detail">${escapeHtml(detailParts.join(' · '))}</div>` : ''}
             </td>`;
         }
 
         function buildPrintableTimetableHtml(ta) {
+            const emojiPrefix = ta.emoji ? escapeHtml(ta.emoji) + ' ' : '';
             let html = `
                 <div class="print-header">
-                    <h1>${escapeHtml(ta.name)} — Timetable</h1>
-                    <div class="print-date">Generated ${escapeHtml(new Date().toLocaleDateString())}</div>
+                    <div>
+                        <h1>${emojiPrefix}${escapeHtml(ta.name)}</h1>
+                        <div class="print-subtitle">TA Timetable</div>
+                    </div>
+                    <div class="print-date">Generated ${escapeHtml(new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}</div>
                 </div>`;
 
             ['A', 'B'].forEach(week => {
-                html += `<h2 class="print-week-title">Week ${week}</h2>`;
-                html += `<table class="print-table"><thead><tr><th>Time</th>${DAY_OPTIONS.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+                html += `<div class="print-week-band print-week-${week.toLowerCase()}">
+                    <h2 class="print-week-title">Week ${week}</h2>
+                    <table class="print-table"><thead><tr><th class="print-period-label">Time</th>${DAY_OPTIONS.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
                 PERIOD_OPTIONS.forEach(period => {
                     if (period === 'Int') return;
                     const timeLabel = PERIOD_TIME_LABELS[period] || '';
-                    html += `<tr><td class="print-period-label">P${escapeHtml(period)}<br>${escapeHtml(timeLabel)}</td>`;
+                    html += `<tr><td class="print-period-label">P${escapeHtml(period)}<br><span class="print-time">${escapeHtml(timeLabel)}</span></td>`;
                     DAY_OPTIONS.forEach(day => {
                         html += printableCellHtml(ta, week, day, period);
                     });
                     html += `</tr>`;
                 });
-                html += `</tbody></table>`;
+                html += `</tbody></table></div>`;
             });
 
             return html;
@@ -3942,7 +4124,23 @@
             saveCurrentTimetableState(); // make sure any on-screen edits are captured first
 
             const printArea = document.getElementById('printable-timetable');
-            printArea.innerHTML = buildPrintableTimetableHtml(ta);
+            printArea.innerHTML = `<section class="print-ta-sheet">${buildPrintableTimetableHtml(ta)}</section>`;
+            window.print();
+        }
+
+        // Batch export: every TA's timetable, one per printed page, in the same
+        // alphabetical order the TA dropdown uses — for printing/handing out the
+        // whole staff's schedules in one go instead of one-by-one.
+        function exportAllTimetablesToPDF() {
+            if (!taDatabase.length) return;
+            saveCurrentTimetableState(); // capture the currently-open TA's on-screen edits first
+
+            const sorted = [...taDatabase].sort((a, b) => a.name.localeCompare(b.name));
+            const printArea = document.getElementById('printable-timetable');
+            printArea.innerHTML = sorted.map((ta, idx) => {
+                const pageBreak = idx < sorted.length - 1 ? '<div class="print-page-break"></div>' : '';
+                return `<section class="print-ta-sheet">${buildPrintableTimetableHtml(ta)}</section>${pageBreak}`;
+            }).join('');
             window.print();
         }
 
@@ -4123,7 +4321,7 @@
                     row.className = 'flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow';
                     row.innerHTML = `
                         <div>
-                            <div class="font-medium text-gray-800 text-base">${ta.name}</div>
+                            <div class="font-medium text-gray-800 text-base">${taDisplayName(ta)}</div>
                             <div class="text-xs text-gray-500 mt-1">Skills: ${ta.skills.join(', ')}</div>
                             <div class="text-[10px] mt-1.5 border px-2 py-0.5 inline-block rounded ${badgeColor}">${matchText}</div>
                         </div>
@@ -4270,7 +4468,7 @@
                                 ${ta.name.charAt(0)}
                             </div>
                             <div class="ml-4">
-                                <div class="text-sm font-medium text-gray-900">${ta.name}</div>
+                                <div class="text-sm font-medium text-gray-900">${taDisplayName(ta)}</div>
                                 <div class="text-xs text-gray-500">Skills: ${ta.skills.join(', ')}</div>
                             </div>
                         </div>
@@ -4415,6 +4613,7 @@
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-gray-100';
                 tr.innerHTML = `
+                    <td class="px-2 py-1"><input type="text" value="${escapeHtml(ta.emoji || '')}" maxlength="4" placeholder="🌟" title="Optional emoji shown before this TA's name everywhere — e.g. mark someone newly joined" oninput="updateTaField(${idx}, 'emoji', this.value)" class="w-12 border border-gray-200 rounded px-2 py-1 text-sm text-center"></td>
                     <td class="px-2 py-1"><input type="text" value="${escapeHtml(ta.name)}" oninput="updateTaField(${idx}, 'name', this.value)" class="w-40 border border-gray-200 rounded px-2 py-1 text-sm"></td>
                     <td class="px-2 py-1"><input type="text" value="${escapeHtml(ta.tags)}" placeholder="SEN, Math" oninput="updateTaField(${idx}, 'tags', this.value)" class="w-full border border-gray-200 rounded px-2 py-1 text-sm"></td>
                     <td class="px-2 py-1"><button onclick="removeTaRow(${idx})" title="Delete" class="text-gray-400 hover:text-red-500 text-sm px-1">✕</button></td>
@@ -4428,7 +4627,7 @@
         }
 
         function addTaRow() {
-            taListData.push({ id: 'ta-' + Date.now(), name: '', tags: '' });
+            taListData.push({ id: 'ta-' + Date.now(), name: '', tags: '', emoji: '' });
             renderTaListTable();
         }
 
@@ -4511,6 +4710,7 @@
         // (where we do NOT want to reset the sidebar out of student mode just
         // because someone tweaked a Class Needs row in a different tab).
         function liveRefreshClassNeedsPool() {
+            updateUnassignedFooterCount();
             if (currentStudentId) return; // sidebar is currently showing a student, not the Class Needs pool — nothing to refresh here
 
             const highZone = document.getElementById('unassigned-high');
@@ -4519,17 +4719,55 @@
             highZone.innerHTML = '';
             standardZone.innerHTML = '';
 
-            let shownCount = 0;
             classNeedsData.forEach(item => {
                 if (isClassNeedAssigned(item.id)) return; // already placed on some TA's timetable — don't offer it again
                 const card = createUnassignedCardElement(item);
                 (item.priority === 'high' ? highZone : standardZone).appendChild(card);
-                shownCount++;
             });
 
-            const footerCount = document.getElementById('unassigned-total-count');
-            if (footerCount) footerCount.innerText = shownCount;
             reapplyClassFilter();
+        }
+
+        // Real, system-wide "still needs a TA" count — every unfilled Class Need
+        // PLUS every distinct real-world class period (a student's own code+room
+        // in a given week/day/period, de-duplicated so a class shared by several
+        // students only counts once) that has no TA covering it yet, found via
+        // the same matching findTaForStudentPeriod uses everywhere else. This
+        // replaces the old count that only ever looked at classNeedsData (empty
+        // by default) and so stayed stuck at 0 for the normal student-based
+        // workflow.
+        function countUnassignedCoverageGaps() {
+            let count = 0;
+            classNeedsData.forEach(item => {
+                if (!isClassNeedAssigned(item.id)) count++;
+            });
+
+            const seenSlots = new Set();
+            studentTimetables.forEach(student => {
+                ['A', 'B'].forEach(week => {
+                    const weekData = student.entries && student.entries[week];
+                    if (!weekData) return;
+                    DAY_OPTIONS.forEach(day => {
+                        const dayData = weekData[day];
+                        if (!dayData) return;
+                        PERIOD_OPTIONS.forEach(period => {
+                            const cell = dayData[period];
+                            if (!cell || !cell.code || !cell.code.trim()) return;
+                            const slotKey = week + '|' + day + '|' + period + '|' +
+                                cell.code.trim().toLowerCase() + '|' + (cell.room || '').trim().toLowerCase();
+                            if (seenSlots.has(slotKey)) return;
+                            seenSlots.add(slotKey);
+                            if (!findTaForStudentPeriod(student.id, week, day, period)) count++;
+                        });
+                    });
+                });
+            });
+            return count;
+        }
+
+        function updateUnassignedFooterCount() {
+            const footerCount = document.getElementById('unassigned-total-count');
+            if (footerCount) footerCount.innerText = countUnassignedCoverageGaps();
         }
 
         function rebuildTaDatabase() {
@@ -4545,6 +4783,7 @@
                     return {
                         id: ta.id,
                         name: ta.name.trim(),
+                        emoji: (ta.emoji || '').trim(),
                         skills: parseTags(ta.tags),
                         timetables: existing ? existing.timetables : { A: {}, B: {} },
                         stats: existing ? existing.stats : { absences: 0, coversProvided: 0, basePeriods: 25 }
@@ -4555,7 +4794,7 @@
             newDatabase.forEach(ta => taDatabase.push(ta));
 
             const selector = document.getElementById('ta-selector');
-            selector.innerHTML = taDatabase.map(ta => `<option value="${ta.id}">${ta.name}</option>`).join('');
+            selector.innerHTML = taDatabase.map(ta => `<option value="${ta.id}">${escapeHtml(taDisplayName(ta))}</option>`).join('');
 
             if (!taDatabase.find(ta => ta.id === currentActiveTA)) {
                 currentActiveTA = taDatabase.length ? taDatabase[0].id : null;
@@ -4968,7 +5207,7 @@
                     }
                     const taMatch = findTaForStudentPeriod(student.id, week, day, period);
                     const badge = taMatch
-                        ? `<div class="text-[10px] mt-1 px-1.5 py-0.5 inline-block rounded ${taMatch.covering ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}">👤 ${escapeHtml(taMatch.ta.name)}${taMatch.covering ? ' (cover)' : ''}</div>`
+                        ? `<div class="text-[10px] mt-1 px-1.5 py-0.5 inline-block rounded ${taMatch.covering ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}">👤 ${escapeHtml(taDisplayName(taMatch.ta))}${taMatch.covering ? ' (cover)' : ''}</div>`
                         : `<div class="text-[10px] mt-1 px-1.5 py-0.5 inline-block rounded bg-gray-100 text-gray-500">Unassigned</div>`;
                     html += `<div class="timetable-cell cursor-pointer hover:bg-blue-50 transition-colors" onclick="openAssignTaForStudentPeriod('${student.id}','${week}','${day}','${period}')">
                         <span class="class-title">${escapeHtml(cell.code)}</span>
@@ -5002,7 +5241,7 @@
 
             const current = findTaForStudentPeriod(studentId, week, day, period);
             document.getElementById('assign-ta-current').textContent = current
-                ? `Currently with: ${current.ta.name}${current.covering ? ' (covering)' : ''}`
+                ? `Currently with: ${taDisplayName(current.ta)}${current.covering ? ' (covering)' : ''}`
                 : 'Currently unassigned';
 
             const freeTAs = taDatabase.filter(ta => {
@@ -5012,7 +5251,7 @@
 
             let listHtml = freeTAs.map(ta => `
                 <div class="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
-                    <div class="font-medium text-gray-800 text-sm">${escapeHtml(ta.name)}</div>
+                    <div class="font-medium text-gray-800 text-sm">${escapeHtml(taDisplayName(ta))}</div>
                     <button onclick="confirmAssignTaForStudentPeriod('${ta.id}')" class="bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 px-3 py-1.5 rounded-md text-xs font-medium transition-colors">
                         ${current && current.ta.id === ta.id ? 'Keep' : 'Assign'}
                     </button>
@@ -5022,7 +5261,7 @@
             if (current) {
                 listHtml += `
                     <div class="flex justify-between items-center p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <div class="text-sm text-red-700">Remove from ${escapeHtml(current.ta.name)}</div>
+                        <div class="text-sm text-red-700">Remove from ${escapeHtml(taDisplayName(current.ta))}</div>
                         <button onclick="confirmAssignTaForStudentPeriod(null)" class="bg-white text-red-600 hover:bg-red-600 hover:text-white border border-red-300 px-3 py-1.5 rounded-md text-xs font-medium transition-colors">Unassign</button>
                     </div>
                 `;
@@ -5069,6 +5308,91 @@
         let compareWeek = 'A';
         let compareDragKey = null; // key of the card currently being dragged, if any
 
+        // Compare View's own small undo stack — separate from the app-wide
+        // undoStack/pushUndoSnapshot system, since compareOrder is purely a
+        // display arrangement (which cards are lined up, in what order) and
+        // was never part of buildStateSnapshot(); no real data is touched by
+        // adding/removing/reordering a card, so it doesn't belong there.
+        let compareOrderHistory = [];
+
+        function pushCompareHistory() {
+            compareOrderHistory.push(compareOrder.slice());
+            if (compareOrderHistory.length > 20) compareOrderHistory.shift();
+            updateCompareUndoButton();
+        }
+
+        function undoCompareChange() {
+            if (!compareOrderHistory.length) return;
+            compareOrder = compareOrderHistory.pop();
+            renderComparePicker();
+            renderCompareGrid();
+            updateCompareUndoButton();
+        }
+
+        function updateCompareUndoButton() {
+            const btn = document.getElementById('compare-undo-btn');
+            if (!btn) return;
+            const enabled = compareOrderHistory.length > 0;
+            btn.disabled = !enabled;
+            btn.classList.toggle('cursor-not-allowed', !enabled);
+            btn.classList.toggle('text-gray-400', !enabled);
+            btn.classList.toggle('border-gray-300', !enabled);
+            btn.classList.toggle('text-pink-600', enabled);
+            btn.classList.toggle('border-pink-300', enabled);
+            btn.classList.toggle('hover:bg-pink-50', enabled);
+        }
+
+        function handleCompareStudentSearch(query) {
+            const resultsEl = document.getElementById('compare-student-search-results');
+            if (!resultsEl) return;
+            const term = (query || '').trim().toLowerCase();
+            if (!term) {
+                resultsEl.classList.add('hidden');
+                resultsEl.innerHTML = '';
+                return;
+            }
+            const matches = studentTimetables
+                .filter(s => s.name.toLowerCase().includes(term) && !compareOrder.includes('student:' + s.id))
+                .slice(0, 8);
+            resultsEl.innerHTML = matches.length
+                ? matches.map(s => `
+                    <button type="button" onclick="addStudentToCompare('${s.id}')" class="w-full text-left px-3 py-2 text-xs hover:bg-pink-50 transition-colors flex items-center gap-1.5 border-b border-gray-100 last:border-0">
+                        <span>🎓</span><span class="truncate">${escapeHtml(s.name)}${s.yearGroup ? ` <span class="text-gray-400">(${escapeHtml(s.yearGroup)})</span>` : ''}</span>
+                    </button>
+                `).join('')
+                : '<div class="text-xs text-gray-400 italic p-3 text-center">No matching students.</div>';
+            resultsEl.classList.remove('hidden');
+        }
+
+        function hideCompareStudentSearchResults() {
+            const resultsEl = document.getElementById('compare-student-search-results');
+            if (resultsEl) {
+                resultsEl.classList.add('hidden');
+                resultsEl.innerHTML = '';
+            }
+        }
+
+        function addStudentToCompare(studentId) {
+            const key = 'student:' + studentId;
+            if (compareOrder.includes(key)) return;
+            pushCompareHistory();
+            compareOrder.push(key);
+            renderComparePicker();
+            renderCompareGrid();
+            const input = document.getElementById('compare-student-search');
+            if (input) input.value = '';
+            hideCompareStudentSearchResults();
+        }
+
+        function removeCompareCard(key) {
+            const idx = compareOrder.indexOf(key);
+            if (idx === -1) return;
+            pushCompareHistory();
+            compareOrder.splice(idx, 1);
+            renderComparePicker();
+            renderCompareGrid();
+        }
+
         function openCompareModal() {
             if (compareOrder.length === 0) {
                 // Sensible default so the view isn't empty the first time it opens.
@@ -5077,6 +5401,7 @@
             }
             renderComparePicker();
             renderCompareGrid();
+            updateCompareUndoButton();
             document.getElementById('compare-modal').classList.remove('hidden');
         }
 
@@ -5099,6 +5424,7 @@
         }
 
         function toggleCompareSelection(key) {
+            pushCompareHistory();
             const idx = compareOrder.indexOf(key);
             if (idx === -1) compareOrder.push(key); else compareOrder.splice(idx, 1);
             renderComparePicker();
@@ -5110,7 +5436,7 @@
             let html = taDatabase.map(ta => {
                 const key = 'ta:' + ta.id;
                 const active = compareOrder.includes(key);
-                return `<button type="button" onclick="toggleCompareSelection('${key}')" class="text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${escapeHtml(ta.name)}</button>`;
+                return `<button type="button" onclick="toggleCompareSelection('${key}')" class="text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${escapeHtml(taDisplayName(ta))}</button>`;
             }).join('');
 
             if (currentStudentId) {
@@ -5144,7 +5470,7 @@
             if (!cell || !cell.code) return { html: '', assign: null };
             const taMatch = findTaForStudentPeriod(id, week, day, period);
             const taLabel = taMatch
-                ? `<div class="text-indigo-600 mt-0.5">👤${escapeHtml(taMatch.ta.name)}</div>`
+                ? `<div class="text-indigo-600 mt-0.5">👤${escapeHtml(taDisplayName(taMatch.ta))}</div>`
                 : `<div class="text-red-400 mt-0.5">unassigned</div>`;
             return { html: `${escapeHtml(cell.code)}${taLabel}`, assign: { studentId: id, week, day, period } };
         }
@@ -5154,7 +5480,7 @@
             if (kind === 'ta') {
                 const ta = taDatabase.find(t => t.id === id);
                 if (!ta) return '';
-                title = ta.name;
+                title = taDisplayName(ta);
             } else {
                 const student = studentTimetables.find(s => s.id === id);
                 if (!student) return '';
@@ -5183,7 +5509,8 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
                         </svg>
-                        <span class="truncate" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+                        <span class="truncate flex-1" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+                        <button type="button" title="Remove from comparison" onmousedown="event.stopPropagation()" onclick="removeCompareCard('${key}')" class="text-gray-300 hover:text-red-500 shrink-0 cursor-pointer leading-none text-base transition-colors">&times;</button>
                     </div>
                     <table class="compare-table">
                         <thead><tr><th></th>${DAY_OPTIONS.map(d => `<th>${d}</th>`).join('')}</tr></thead>
@@ -5258,6 +5585,7 @@
             if (!compareDragKey || compareDragKey === targetKey) return;
             const fromIdx = compareOrder.indexOf(compareDragKey);
             if (fromIdx === -1) return;
+            pushCompareHistory();
             compareOrder.splice(fromIdx, 1);
             let toIdx = compareOrder.indexOf(targetKey);
             if (toIdx === -1) toIdx = compareOrder.length - 1;
