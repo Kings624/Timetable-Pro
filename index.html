@@ -430,7 +430,7 @@
                 display: block !important;
             }
             @page {
-                size: landscape;
+                size: A4 portrait;
                 margin: 1.1cm;
             }
             .print-ta-sheet {
@@ -447,8 +447,8 @@
                 justify-content: space-between;
                 align-items: flex-end;
                 border-bottom: 3px solid #ec4899;
-                padding-bottom: 8px;
-                margin-bottom: 14px;
+                padding-bottom: 6px;
+                margin-bottom: 10px;
             }
             .print-header h1 {
                 font-size: 22px;
@@ -468,16 +468,16 @@
                 color: #6b7280;
             }
             .print-week-band {
-                margin-bottom: 16px;
+                margin-bottom: 10px;
                 page-break-inside: avoid;
             }
             .print-week-title {
                 display: inline-block;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 700;
-                padding: 3px 14px;
+                padding: 2px 12px;
                 border-radius: 999px;
-                margin: 0 0 8px;
+                margin: 0 0 5px;
             }
             .print-week-a .print-week-title { background: #dbeafe; color: #1e40af; }
             .print-week-b .print-week-title { background: #f3e8ff; color: #6b21a8; }
@@ -491,7 +491,7 @@
             .print-week-b .print-table th { background: #faf5ff; }
             .print-table th, .print-table td {
                 border: 1px solid #d1d5db;
-                padding: 5px 6px;
+                padding: 3px 5px;
                 text-align: left;
                 vertical-align: top;
             }
@@ -539,6 +539,10 @@
             .print-badge-duty { background: #ede9fe; color: #5b21b6; }
             .print-cell-cover { background: #f0fdf4; }
             .print-cell-duty { background: #faf5ff; }
+            /* Student timetable export only — which TA (if any) covers each period */
+            .print-badge-row { margin-top: 2px; }
+            .print-badge-ta { background: #dbeafe; color: #1e40af; }
+            .print-badge-unassigned { background: #fee2e2; color: #991b1b; }
         }
     </style>
 </head>
@@ -730,8 +734,8 @@
             
             <!-- Week Toggle -->
             <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg mb-6 self-center">
-                <button id="btn-week-a" class="tab-btn active bg-white shadow px-6 py-1.5 rounded-md text-sm font-medium transition-all" onclick="toggleWeek('A')">☀️ Week A</button>
-                <button id="btn-week-b" class="tab-btn px-6 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-all" onclick="toggleWeek('B')">🌙 Week B</button>
+                <button id="btn-week-a" class="tab-btn active bg-white shadow px-6 py-1.5 rounded-md text-sm font-medium transition-all" onclick="toggleWeek('A')">Ⓐ Week A</button>
+                <button id="btn-week-b" class="tab-btn px-6 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-all" onclick="toggleWeek('B')">Ⓑ Week B</button>
             </div>
 
             <!-- Timetable Container -->
@@ -1057,8 +1061,8 @@
                         <div class="flex justify-between items-center mb-3">
                             <button onclick="closeStudentGrid()" class="text-sm text-blue-600 hover:underline">← Back to Student List</button>
                             <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg">
-                                <button id="student-grid-btn-a" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium" onclick="switchStudentGridWeek('A')">☀️ Week A</button>
-                                <button id="student-grid-btn-b" class="tab-btn px-4 py-1 rounded-md text-xs font-medium text-gray-600" onclick="switchStudentGridWeek('B')">🌙 Week B</button>
+                                <button id="student-grid-btn-a" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium" onclick="switchStudentGridWeek('A')">Ⓐ Week A</button>
+                                <button id="student-grid-btn-b" class="tab-btn px-4 py-1 rounded-md text-xs font-medium text-gray-600" onclick="switchStudentGridWeek('B')">Ⓑ Week B</button>
                             </div>
                         </div>
                         <h4 id="student-grid-title" class="text-sm font-semibold text-gray-700 mb-2"></h4>
@@ -1109,17 +1113,25 @@
                     </svg>
                     <span id="student-modal-title">Student Timetable</span>
                 </h3>
-                <button onclick="closeStudentTimetableModal()" class="text-gray-400 hover:text-gray-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
+                <div class="flex items-center gap-3">
+                    <button onclick="exportStudentTimetableToPDF(studentModalStudentId)" title="Export this student's timetable as a PDF" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-transparent hover:bg-pink-50 hover:border-pink-200 text-gray-600 hover:text-pink-700 transition-colors text-xs font-medium">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Export
+                    </button>
+                    <button onclick="closeStudentTimetableModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="px-6 pt-4 flex items-center justify-between shrink-0">
                 <p class="text-xs text-gray-500">Click a period to assign or change which TA is with this student.</p>
                 <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg">
-                    <button id="student-modal-week-a" onclick="setStudentModalWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">☀️ Week A</button>
-                    <button id="student-modal-week-b" onclick="setStudentModalWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">🌙 Week B</button>
+                    <button id="student-modal-week-a" onclick="setStudentModalWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">Ⓐ Week A</button>
+                    <button id="student-modal-week-b" onclick="setStudentModalWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">Ⓑ Week B</button>
                 </div>
             </div>
             <div class="p-6 overflow-auto">
@@ -1180,8 +1192,8 @@
             </div>
             <div class="px-6 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3 shrink-0 bg-gray-50">
                 <div class="flex items-center gap-1 bg-gray-200 p-1 rounded-lg shrink-0">
-                    <button id="compare-week-a" onclick="setCompareWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">☀️ Week A</button>
-                    <button id="compare-week-b" onclick="setCompareWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">🌙 Week B</button>
+                    <button id="compare-week-a" onclick="setCompareWeek('A')" class="tab-btn active bg-white shadow px-4 py-1 rounded-md text-xs font-medium transition-all">Ⓐ Week A</button>
+                    <button id="compare-week-b" onclick="setCompareWeek('B')" class="px-4 py-1 rounded-md text-xs font-medium text-gray-600 transition-all">Ⓑ Week B</button>
                 </div>
                 <div class="text-xs text-gray-500 shrink-0">Line up:</div>
                 <div id="compare-picker-list" class="flex flex-wrap gap-1.5 max-w-[34rem]"></div>
@@ -4141,6 +4153,65 @@
                 const pageBreak = idx < sorted.length - 1 ? '<div class="print-page-break"></div>' : '';
                 return `<section class="print-ta-sheet">${buildPrintableTimetableHtml(ta)}</section>${pageBreak}`;
             }).join('');
+            window.print();
+        }
+
+        // ---- Student timetable export — same idea as the TA export above, but
+        // reading a student's own entries and showing which TA (if any) covers
+        // each period instead of a title/teacher/room only. ----
+        function printableStudentCellHtml(student, week, day, period) {
+            const cell = student.entries[week] && student.entries[week][day] && student.entries[week][day][period];
+            if (!cell || !cell.code) return '<td class="print-cell print-cell-empty"></td>';
+
+            const taMatch = findTaForStudentPeriod(student.id, week, day, period);
+            const badge = taMatch
+                ? `<span class="print-badge ${taMatch.covering ? 'print-badge-cover' : 'print-badge-ta'}">${escapeHtml(taDisplayName(taMatch.ta))}${taMatch.covering ? ' (cover)' : ''}</span>`
+                : '<span class="print-badge print-badge-unassigned">Unassigned</span>';
+            const detailParts = [cell.teacher, cell.room].filter(Boolean);
+
+            return `<td class="print-cell">
+                <div class="print-title-row"><span class="print-title">${escapeHtml(cell.code)}</span></div>
+                ${detailParts.length ? `<div class="print-detail">${escapeHtml(detailParts.join(' · '))}</div>` : ''}
+                <div class="print-badge-row">${badge}</div>
+            </td>`;
+        }
+
+        function buildPrintableStudentTimetableHtml(student) {
+            let html = `
+                <div class="print-header">
+                    <div>
+                        <h1>${escapeHtml(student.name)}</h1>
+                        <div class="print-subtitle">Student Timetable${student.yearGroup ? ' · ' + escapeHtml(student.yearGroup) : ''}</div>
+                    </div>
+                    <div class="print-date">Generated ${escapeHtml(new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}</div>
+                </div>`;
+
+            ['A', 'B'].forEach(week => {
+                html += `<div class="print-week-band print-week-${week.toLowerCase()}">
+                    <h2 class="print-week-title">Week ${week}</h2>
+                    <table class="print-table"><thead><tr><th class="print-period-label">Time</th>${DAY_OPTIONS.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+                PERIOD_OPTIONS.forEach(period => {
+                    if (period === 'Int') return;
+                    const timeLabel = PERIOD_TIME_LABELS[period] || '';
+                    html += `<tr><td class="print-period-label">P${escapeHtml(period)}<br><span class="print-time">${escapeHtml(timeLabel)}</span></td>`;
+                    DAY_OPTIONS.forEach(day => {
+                        html += printableStudentCellHtml(student, week, day, period);
+                    });
+                    html += `</tr>`;
+                });
+                html += `</tbody></table></div>`;
+            });
+
+            return html;
+        }
+
+        function exportStudentTimetableToPDF(studentId) {
+            const student = studentTimetables.find(s => s.id === studentId);
+            if (!student) return;
+            saveCurrentTimetableState(); // capture any on-screen TA edits first
+
+            const printArea = document.getElementById('printable-timetable');
+            printArea.innerHTML = `<section class="print-ta-sheet">${buildPrintableStudentTimetableHtml(student)}</section>`;
             window.print();
         }
 
