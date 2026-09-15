@@ -442,14 +442,13 @@
         .janice-theme .class-block {
             border-radius: 14px;
             box-shadow: 0 3px 8px -2px rgba(74, 59, 71, 0.18);
-        }
-        /* A gentle hand-placed-sticker feel — alternating tilt, undone on
-           hover/drag so it never fights the pointer while dragging. */
-        .janice-theme .class-block:nth-of-type(odd) { transform: rotate(-0.8deg); }
-        .janice-theme .class-block:nth-of-type(even) { transform: rotate(0.8deg); }
-        .janice-theme .class-block:hover,
-        .janice-theme .class-block.is-dragging {
-            transform: none;
+            /* Deliberately no `transform` here (an earlier version rotated each
+               card a degree or two for a hand-placed-sticker look) — these
+               blocks are draggable="true" for moving/swapping placed classes,
+               and a resting-state CSS transform on a native-draggable element
+               silently kills dragstart in some browsers (observed on Safari/
+               macOS). If a "tilted sticker" look comes back, it has to live on
+               a non-draggable decorative layer, never on .class-block itself. */
         }
         /* Week A = warm (rose/gold), Week B = cool (lavender/mint) — the
            same warm/cool split as the rest of the app's Week A/B distinction,
