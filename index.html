@@ -98,22 +98,23 @@
             transform: translateY(0) scale(0.96);
         }
         
-        /* Safety net for Tailwind's .hidden utility (display:none), which this
-           app relies on everywhere — modals, badges, and critically
-           #timetable-body-a/b (toggled between weeks). Tailwind's CDN build
-           injects its generated stylesheet at runtime, and .timetable-grid
-           below (display:grid, defined here, not by Tailwind) has the exact
-           same specificity as .hidden — so whichever stylesheet happens to
-           end up later in the cascade wins. For most .hidden toggles that's
-           harmless (nothing else claims a conflicting display value), but
-           #timetable-body-b carries both "timetable-grid" and "hidden" at
-           once, and losing this race means BOTH weeks render stacked on top
-           of each other instead of one being hidden — exactly the "extra
-           periods" bug this fixes. !important makes this deterministic
-           regardless of load timing/order, instead of leaving it to chance.
-           This is purely a display fix — it never touches what's toggled
-           hidden or when, only guarantees "hidden actually means hidden". */
-        .hidden {
+        /* Safety net for the #timetable-body-a/b vs. .timetable-grid race:
+           Tailwind's CDN build injects its generated stylesheet (incl.
+           .hidden { display:none }) at runtime, and .timetable-grid below
+           (display:grid, defined here, not by Tailwind) has the exact same
+           specificity as .hidden — so whichever stylesheet ends up later in
+           the cascade wins. #timetable-body-a/b carry both classes at once,
+           and losing that race means both weeks render stacked on top of
+           each other instead of one being hidden — the "extra periods" bug.
+           Scoped to exactly this combination (NOT a blanket .hidden
+           override) — an earlier, broader version of this fix
+           (`.hidden { display:none !important }`) also defeated Tailwind's
+           responsive hidden/xl:inline-block etc. utilities everywhere else
+           in the page (e.g. the navbar's term badge), which have to stay
+           hidden-below/visible-above a breakpoint rather than always
+           hidden. This version only ever touches the one place that was
+           actually racing. */
+        .timetable-grid.hidden {
             display: none !important;
         }
 
@@ -500,41 +501,25 @@
             transform: rotate(-2.5deg);
             z-index: -1;
         }
-        /* Week A = her light "paper" palette, Week B = a dark "night desk"
-           palette — a firm, always-on choice per week rather than tied to
-           the OS's dark-mode setting, so which week she's looking at is
-           unmistakable at a glance regardless of anyone's system settings.
-           toggleWeek() mirrors the week onto .main-panel itself as
-           .week-b-active-panel (it has no ancestor in common with the
-           week-active header row to hang a single selector off of), so the
-           whole background switches along with the grid. */
         .janice-theme .main-panel {
             background:
                 radial-gradient(#e9d4c4 1.5px, transparent 2px) 0 0/20px 20px,
                 #fdf7f2;
         }
-        .janice-theme .main-panel.week-b-active-panel {
-            background:
-                radial-gradient(#3a2a3a 1.5px, transparent 2px) 0 0/20px 20px,
-                #241a25;
-        }
-        /* The legend under the grid and her sign-off both live inside
-           .main-panel and inherit its (Tailwind) text-gray-500, which — like
-           the "Period N" span below — is set directly on those elements and
-           so needs its own override rather than relying on inheritance. */
-        .janice-theme .main-panel.week-b-active-panel .text-gray-500 {
-            color: #C6AFC0;
-        }
 
+        /* Week A = rose (warm), Week B = sky blue (cool) — a lighter, more
+           turquoise-leaning blue than the app's own default blue (used for
+           buttons/links elsewhere), so her Week B doesn't just look like
+           everyone else's blue with different rounding. */
         .janice-theme #timetable-body-a .class-block {
             background-color: #FBE4E9;
             border-color: #F3C3CE;
             border-left-color: #E8879B;
         }
         .janice-theme #timetable-body-b .class-block {
-            background-color: #3A2E4D;
-            border-color: #584a6e;
-            border-left-color: #C8B4E8;
+            background-color: #DFF3FC;
+            border-color: #B9E6F7;
+            border-left-color: #0EA5E9;
         }
         .janice-theme #timetable-body-a .time-label,
         .janice-theme .week-a-active .timetable-header {
@@ -543,27 +528,8 @@
         }
         .janice-theme #timetable-body-b .time-label,
         .janice-theme .week-b-active .timetable-header {
-            background-color: #3A2E4D;
-            border-color: #584a6e;
-            color: #F5E9EC;
-        }
-        /* The "Period N" span inside each time-label carries its own
-           text-gray-700 utility class, which (being set directly on that
-           element) wins over inheriting color from .time-label no matter
-           how specific that rule is — so Week B needs its own override here,
-           or "Period 1" etc. render as barely-legible dark-on-dark. */
-        .janice-theme #timetable-body-b .time-label *,
-        .janice-theme .week-b-active .timetable-header * {
-            color: #F5E9EC;
-        }
-        .janice-theme #timetable-body-b .class-block .class-title {
-            color: #F5E9EC;
-        }
-        .janice-theme #timetable-body-b .class-block .class-detail {
-            color: #C6AFC0;
-        }
-        .janice-theme #timetable-body-b .class-block::after {
-            background: #3a2a3a;
+            background-color: #DFF3FC;
+            border-color: #B9E6F7;
         }
         /* A little round "sticker seal" marking what kind of period it is —
            read off the same markers the app already writes (data-cover-origin
@@ -977,10 +943,6 @@
                 <!-- Standard-needs zone / Week B when a student is selected — a card dropped here stays here -->
                 <div id="unassigned-standard" class="unassigned-zone min-h-[48px] rounded-md transition-colors"></div>
 
-            </div>
-            
-            <div class="p-4 border-t border-gray-200 bg-gray-50 text-xs text-gray-500 text-center">
-                Total Unassigned: <span id="unassigned-total-count" class="font-bold text-gray-700">0</span> periods across all TAs
             </div>
         </aside>
 
@@ -1800,7 +1762,6 @@
             document.getElementById('unassigned-standard').innerHTML = '';
             loadTimetableForActiveTA();
             initCoverButtons();
-            updateUnassignedFooterCount();
         }
 
         // Rebuild the navbar TA <select> from whatever is actually in taDatabase
@@ -3037,7 +2998,6 @@
                     }
                 });
             });
-            updateUnassignedFooterCount();
         }
 
         // Scan every TA's saved timetable for an entry whose classData satisfies
@@ -3400,16 +3360,6 @@
                 // after switching away from her.
                 const panel = document.getElementById('janice-notes-panel');
                 if (panel) panel.classList.add('hidden');
-            }
-            // Sync the panel's light/dark state to whichever week is already
-            // showing — toggleWeek() keeps this in sync when the tab is
-            // clicked, but switching TA doesn't go through toggleWeek, so a
-            // switch straight into Janice's view (with Week B left showing
-            // from a previous TA) needs this checked here too.
-            const bodyB = document.getElementById('timetable-body-b');
-            const mainPanel = document.querySelector('.main-panel');
-            if (mainPanel && bodyB) {
-                mainPanel.classList.toggle('week-b-active-panel', !bodyB.classList.contains('hidden'));
             }
         }
 
@@ -4156,14 +4106,6 @@
             const bodyA = document.getElementById('timetable-body-a');
             const bodyB = document.getElementById('timetable-body-b');
             const headerRow = document.getElementById('timetable-header-row');
-            // Mirrors the active week onto .main-panel itself, purely for
-            // Janice's theme (see .week-b-active-panel) — .main-panel has no
-            // ancestor in common with the header row's week-active class, so
-            // switching her whole background by week needs its own toggle
-            // here. Harmless no-op for every other TA, since nothing outside
-            // .janice-theme reacts to this class.
-            const mainPanel = document.querySelector('.main-panel');
-            if (mainPanel) mainPanel.classList.toggle('week-b-active-panel', week === 'B');
 
             if (week === 'A') {
                 btnA.classList.replace('text-gray-600', 'active');
@@ -5152,7 +5094,6 @@
         // (where we do NOT want to reset the sidebar out of student mode just
         // because someone tweaked a Class Needs row in a different tab).
         function liveRefreshClassNeedsPool() {
-            updateUnassignedFooterCount();
             if (currentStudentId) return; // sidebar is currently showing a student, not the Class Needs pool — nothing to refresh here
 
             const highZone = document.getElementById('unassigned-high');
@@ -5168,48 +5109,6 @@
             });
 
             reapplyClassFilter();
-        }
-
-        // Real, system-wide "still needs a TA" count — every unfilled Class Need
-        // PLUS every distinct real-world class period (a student's own code+room
-        // in a given week/day/period, de-duplicated so a class shared by several
-        // students only counts once) that has no TA covering it yet, found via
-        // the same matching findTaForStudentPeriod uses everywhere else. This
-        // replaces the old count that only ever looked at classNeedsData (empty
-        // by default) and so stayed stuck at 0 for the normal student-based
-        // workflow.
-        function countUnassignedCoverageGaps() {
-            let count = 0;
-            classNeedsData.forEach(item => {
-                if (!isClassNeedAssigned(item.id)) count++;
-            });
-
-            const seenSlots = new Set();
-            studentTimetables.forEach(student => {
-                ['A', 'B'].forEach(week => {
-                    const weekData = student.entries && student.entries[week];
-                    if (!weekData) return;
-                    DAY_OPTIONS.forEach(day => {
-                        const dayData = weekData[day];
-                        if (!dayData) return;
-                        PERIOD_OPTIONS.forEach(period => {
-                            const cell = dayData[period];
-                            if (!cell || !cell.code || !cell.code.trim()) return;
-                            const slotKey = week + '|' + day + '|' + period + '|' +
-                                cell.code.trim().toLowerCase() + '|' + (cell.room || '').trim().toLowerCase();
-                            if (seenSlots.has(slotKey)) return;
-                            seenSlots.add(slotKey);
-                            if (!findTaForStudentPeriod(student.id, week, day, period)) count++;
-                        });
-                    });
-                });
-            });
-            return count;
-        }
-
-        function updateUnassignedFooterCount() {
-            const footerCount = document.getElementById('unassigned-total-count');
-            if (footerCount) footerCount.innerText = countUnassignedCoverageGaps();
         }
 
         function rebuildTaDatabase() {
