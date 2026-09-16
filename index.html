@@ -134,6 +134,30 @@
             transition: background-color 0.2s;
         }
 
+        /* The manual "+ Add class" form (mode toggle + code input + optional
+           multi-match/teacher/room fields + confirm/cancel) needs more height
+           than a compact 2-line class-block row is budgeted for, especially
+           at the enlarged adaptive font size — and every timetable cell has
+           overflow:hidden (see #timetable-body-a/-b rules) so the rest of it
+           would otherwise just get silently clipped. While a cell is in this
+           editing state, let it pop out over the row(s) below instead of
+           being cut off — it's absolutely positioned, so it doesn't disturb
+           the grid's own row-height math for every other cell.  */
+        .timetable-cell.manual-editing {
+            overflow: visible;
+            z-index: 40;
+        }
+        .timetable-cell.manual-editing .manual-entry-form {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 8px 20px -4px rgba(15, 23, 42, 0.25);
+            z-index: 40;
+        }
+
         .timetable-cell.empty:hover {
             background-color: #f8fafc; /* Tailwind slate-50 — a quiet hint this cell is actionable */
         }
@@ -1114,6 +1138,18 @@
         </div>
     </div>
 
+    <!-- What's New — shown once per shared PIN unlock ("admin login") after
+         a new update ships, then not again until the next one. See
+         CHANGELOG_VERSION / showChangelogIfNew, called from submitPinModal. -->
+    <div id="changelog-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-[70]">
+        <div class="bg-white rounded-xl shadow-xl p-6 w-96">
+            <h2 class="text-base font-bold text-gray-900 mb-1 flex items-center gap-1.5">✨ What's New</h2>
+            <p class="text-xs text-gray-500 mb-3">Since your last visit:</p>
+            <ul id="changelog-list" class="list-disc list-inside text-sm text-gray-700 space-y-1.5 mb-4"></ul>
+            <button onclick="closeChangelogModal()" class="w-full px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">Got it</button>
+        </div>
+    </div>
+
     <!-- Print-only content, built fresh each export by exportTimetableToPDF(); hidden on screen -->
     <div id="printable-timetable"></div>
     <input type="file" id="import-data-file-input" accept="application/json" class="hidden" onchange="importDataFromFile(this)">
@@ -1425,6 +1461,22 @@
                 <div id="cover-ta-list" class="space-y-2 max-h-60 overflow-y-auto pr-2">
                     <!-- Dynamically generated TA list goes here -->
                 </div>
+
+                <!-- Admin override: force a busy TA to cover anyway (see submitForceCover).
+                     Only relevant to actually covering an absence, not the "place" mode
+                     used for an unplaced student card, so openCoverModal hides it there. -->
+                <div id="force-cover-section" class="mt-4 border-t border-gray-200 pt-3">
+                    <button type="button" id="force-cover-toggle-btn" onclick="toggleForceCoverPanel()" class="text-xs text-red-600 hover:text-red-700 font-medium flex items-center gap-1">
+                        ⚠️ Admin Override: Force Assign a Busy TA
+                    </button>
+                    <div id="force-cover-panel" class="hidden mt-3 bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
+                        <p class="text-xs text-red-700">Only use this when no one is actually free. The TA you pick will be double-booked — if they already have a class at this time, it will be left unstaffed for the rest of today (this is logged in Stats as a staff shortage).</p>
+                        <select id="force-cover-ta-select" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"></select>
+                        <input id="force-cover-email" type="email" placeholder="Admin email to confirm" autocomplete="off" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                        <p id="force-cover-error" class="hidden text-xs text-red-600"></p>
+                        <button type="button" onclick="submitForceCover()" class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded px-3 py-1.5">Force Assign</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1485,6 +1537,33 @@
                     </thead>
                     <tbody id="cover-history-table-body" class="bg-white divide-y divide-gray-200 text-sm text-gray-700">
                         <!-- Cover history rows injected here -->
+                    </tbody>
+                </table>
+
+                <!-- A Force Assign (see submitForceCover) is the one case where
+                     a covering TA was already busy, not free — their own class
+                     got bumped/unstaffed for the day so the entry in the Cover
+                     Log above could happen at all. Surfaced separately so an
+                     admin reviewing Stats can see exactly when the school was
+                     short-staffed, not just who ultimately covered what. -->
+                <h4 class="text-sm font-semibold text-red-700 mt-6 mb-2 flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>
+                    ⚠️ Staff Shortage Incidents
+                </h4>
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week/Day/Period</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Force-Assigned TA</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent To Cover</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Their Own Class Left Unstaffed</th>
+                        </tr>
+                    </thead>
+                    <tbody id="staff-shortage-table-body" class="bg-white divide-y divide-gray-200 text-sm text-gray-700">
+                        <!-- Staff shortage rows injected here -->
                     </tbody>
                 </table>
             </div>
@@ -1854,6 +1933,32 @@
         let editUnlocked = false;
         try { editUnlocked = sessionStorage.getItem('ta_timetable_edit_unlocked') === '1'; } catch (e) {}
 
+        // Bump CHANGELOG_VERSION and update CHANGELOG_ITEMS with every shipped
+        // update — see showChangelogIfNew, called on a successful shared-PIN
+        // unlock ("admin login" — the closest thing this app has to one).
+        // Stored per-device in localStorage (not synced), so it's shown once
+        // per browser the first time it unlocks after a new version ships.
+        const CHANGELOG_VERSION = '2026-09-16-2';
+        const CHANGELOG_ITEMS = [
+            'Force Assign: when every TA is genuinely busy, an admin can now manually force one to cover anyway — their own class is preserved and comes back automatically the next day.',
+            'Staff shortage incidents (from Force Assign) are now logged in Stats.',
+            'Fixed the "+ Add class" form getting cut off instead of showing fully.'
+        ];
+        function showChangelogIfNew() {
+            let seen = null;
+            try { seen = localStorage.getItem('ta_timetable_last_seen_changelog'); } catch (e) {}
+            if (seen === CHANGELOG_VERSION) return;
+            const modal = document.getElementById('changelog-modal');
+            const list = document.getElementById('changelog-list');
+            if (!modal || !list) return;
+            list.innerHTML = CHANGELOG_ITEMS.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+            modal.classList.remove('hidden');
+            try { localStorage.setItem('ta_timetable_last_seen_changelog', CHANGELOG_VERSION); } catch (e) {}
+        }
+        function closeChangelogModal() {
+            document.getElementById('changelog-modal').classList.add('hidden');
+        }
+
         // Call at the top of any function that mutates shared timetable
         // data. Returns true (proceed) when unlocked; otherwise shows a
         // toast and returns false so the caller can bail out.
@@ -1895,6 +2000,7 @@
                 closePinModal();
                 applyLockUI();
                 showLockToast('Unlocked — editing enabled for this tab');
+                showChangelogIfNew();
             } else {
                 document.getElementById('pin-modal-error').classList.remove('hidden');
             }
@@ -3527,16 +3633,18 @@
                             classData: block.dataset.classData || ''
                         };
                         // A Find Cover assignment tags its entry with extra fields
-                        // (coveredDate/preCoverHtml/coverPairTaId — see assignCover)
-                        // that this rebuild-from-DOM pass would otherwise silently
-                        // drop every time it runs (every TA switch, undo/redo, Data
-                        // Setup apply) — breaking the one-day expiry and Cancel
-                        // Cover for any TA not on screen when that happens. Carry
-                        // them forward from whatever was in this same slot before.
+                        // (coveredDate/preCoverHtml/preCoverClassData/coverPairTaId
+                        // — see assignCover) that this rebuild-from-DOM pass would
+                        // otherwise silently drop every time it runs (every TA
+                        // switch, undo/redo, Data Setup apply) — breaking the
+                        // one-day expiry and Cancel Cover for any TA not on screen
+                        // when that happens. Carry them forward from whatever was
+                        // in this same slot before.
                         const oldEntry = previousWeekData[day] && previousWeekData[day][period];
                         if (oldEntry) {
                             if (oldEntry.coveredDate) newEntry.coveredDate = oldEntry.coveredDate;
                             if (oldEntry.preCoverHtml) newEntry.preCoverHtml = oldEntry.preCoverHtml;
+                            if (oldEntry.preCoverClassData !== undefined) newEntry.preCoverClassData = oldEntry.preCoverClassData;
                             if (oldEntry.coverPairTaId) newEntry.coverPairTaId = oldEntry.coverPairTaId;
                         }
                         ta.timetables[week][day][period] = newEntry;
@@ -4691,6 +4799,11 @@
         function startManualEntry(cell) {
             if (!requireEdit()) return;
             if (!cell || cell.querySelector('.class-block')) return;
+            // See .timetable-cell.manual-editing — lets the form's full height
+            // show over the row(s) below instead of being clipped by the
+            // grid's normal overflow:hidden. Removed wherever this form closes
+            // (Cancel, auto-revert-on-blur, and createManualClassBlock).
+            cell.classList.add('manual-editing');
             cell.innerHTML = `
                 <div class="manual-entry-form p-1">
                     <div class="manual-mode-toggle flex gap-1 mb-1">
@@ -4729,6 +4842,7 @@
                 });
             });
             cell.querySelector('.manual-cancel-btn').addEventListener('click', () => {
+                cell.classList.remove('manual-editing');
                 cell.innerHTML = emptyCellContent(cell);
             });
             codeInput.addEventListener('input', () => { cell.dataset.manualTouched = '1'; });
@@ -4742,6 +4856,7 @@
                     if (!cell.isConnected || cell.contains(document.activeElement)) return;
                     if (cell.dataset.manualTouched === '1') return;
                     if (!cell.querySelector('.manual-entry-form')) return;
+                    cell.classList.remove('manual-editing');
                     cell.innerHTML = emptyCellContent(cell);
                 }, 150);
             });
@@ -4906,6 +5021,7 @@
                 block.classList.remove('is-dragging');
             });
 
+            cell.classList.remove('manual-editing');
             cell.innerHTML = '';
             cell.appendChild(block);
             cell.classList.remove('empty');
@@ -5667,7 +5783,82 @@
                 });
             }
 
+            // Force Assign only makes sense for an actual absence being
+            // covered, not the "place" mode used to find a free slot for an
+            // unplaced student card — and always starts collapsed/reset.
+            const forceSection = document.getElementById('force-cover-section');
+            forceSection.classList.toggle('hidden', coverModalMode !== 'cover');
+            document.getElementById('force-cover-panel').classList.add('hidden');
+            document.getElementById('force-cover-error').classList.add('hidden');
+            document.getElementById('force-cover-email').value = '';
+
             document.getElementById('cover-modal').classList.remove('hidden');
+        }
+
+        function toggleForceCoverPanel() {
+            const panel = document.getElementById('force-cover-panel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                const select = document.getElementById('force-cover-ta-select');
+                // Every TA except the one already absent — covering your own
+                // just-vacated class makes no sense.
+                select.innerHTML = taDatabase
+                    .filter(ta => ta.id !== currentActiveTA)
+                    .map(ta => `<option value="${ta.id}">${escapeHtml(taDisplayName(ta))}</option>`)
+                    .join('');
+                document.getElementById('force-cover-error').classList.add('hidden');
+                document.getElementById('force-cover-email').value = '';
+            }
+        }
+
+        // Pulls the class-title text back out of a stored timetable entry's
+        // html string — used to name the class a force-assigned TA's own
+        // slot gets bumped from, without needing a live DOM element for it
+        // (the covering TA isn't necessarily the one on screen).
+        function getTitleFromStoredHtml(html) {
+            if (!html) return '';
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            const titleEl = tmp.querySelector('.class-title');
+            return titleEl ? (titleEl.textContent || '').replace(/\s+/g, ' ').trim() : '';
+        }
+
+        // Admin override for the rare case where every TA is genuinely busy at
+        // this slot — Janice judges who can be pulled off their own class to
+        // cover instead. Same SUPER_ADMIN_EMAILS check as changing the shared
+        // PIN (a soft deterrent, not real authentication, consistent with the
+        // rest of this app's access model). assignCover itself already snapshots
+        // whatever the chosen TA currently has at this slot and restores it the
+        // next day (see assignCover/revertExpiredCovers), so the only thing this
+        // adds is the explicit warning and the SUPER_ADMIN_EMAILS gate.
+        function submitForceCover() {
+            const errorEl = document.getElementById('force-cover-error');
+            const email = document.getElementById('force-cover-email').value.trim().toLowerCase();
+            if (!SUPER_ADMIN_EMAILS.some(e => e.toLowerCase() === email)) {
+                errorEl.textContent = "This email isn't on the admin list — nothing was changed.";
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            const taId = document.getElementById('force-cover-ta-select').value;
+            const coveringTa = taDatabase.find(t => t.id === taId);
+            if (!coveringTa || !currentCoverBlock) return;
+            const zone = currentCoverBlock.closest('.drop-zone');
+            if (!zone) return;
+            const week = zone.dataset.week, day = zone.dataset.day, period = zone.dataset.period;
+
+            const existingEntry = coveringTa.timetables[week] && coveringTa.timetables[week][day] && coveringTa.timetables[week][day][period];
+            let warning;
+            if (existingEntry) {
+                const bumpedTitle = getTitleFromStoredHtml(existingEntry.html) || 'their own class';
+                warning = `${taDisplayName(coveringTa)} already has "${bumpedTitle}" at this time.\n\nForcing this cover means that class will be UNSTAFFED for the rest of today — no one else will be assigned to it. This will be logged in Stats as a staff shortage.\n\nContinue?`;
+            } else {
+                warning = `${taDisplayName(coveringTa)} is free at this time — this will assign them as normal cover, same as picking them from the list above.\n\nContinue?`;
+            }
+            if (!confirm(warning)) return;
+
+            errorEl.classList.add('hidden');
+            assignCover(taId, week, day, period);
         }
 
         function closeCoverModal() {
@@ -5711,6 +5902,14 @@
                 pushUndoSnapshot();
                 const coveringTA = taDatabase.find(t => t.id === taId);
                 const currentTA = taDatabase.find(t => t.id === currentActiveTA);
+                // Normally never set — openCoverModal's candidate list already
+                // excludes anyone busy at this slot. Only a Force Assign
+                // override (see submitForceCover) can pass a covering TA who
+                // already has their own class here; snapshotting it before the
+                // overwrite below means it survives (as preCoverHtml, further
+                // down) and auto-restores tomorrow exactly like the absent
+                // side does, instead of being silently destroyed.
+                const coveringTaOriginalEntry = coveringTA && coveringTA.timetables[week] && coveringTA.timetables[week][day] && coveringTA.timetables[week][day][period];
                 // Snapshot the absent TA's block exactly as it looks right now,
                 // before any of the "struck-through / greyed-out / Cover: X"
                 // styling below is applied — this is what gets restored once
@@ -5820,6 +6019,14 @@
                 if (coveringTA && coveringTA.timetables[week] && coveringTA.timetables[week][day] && coveringTA.timetables[week][day][period]) {
                     coveringTA.timetables[week][day][period].coveredDate = todayUK;
                     coveringTA.timetables[week][day][period].coverPairTaId = currentActiveTA;
+                    // Force Assign only: this TA's own class at this slot got
+                    // bumped rather than the slot being empty — preserve it so
+                    // it comes back tomorrow (see revertExpiredCovers), the
+                    // same way the absent side's preCoverHtml does.
+                    if (coveringTaOriginalEntry) {
+                        coveringTA.timetables[week][day][period].preCoverHtml = coveringTaOriginalEntry.html;
+                        coveringTA.timetables[week][day][period].preCoverClassData = coveringTaOriginalEntry.classData;
+                    }
                 }
                 if (currentTA && currentTA.timetables[week] && currentTA.timetables[week][day] && currentTA.timetables[week][day][period]) {
                     currentTA.timetables[week][day][period].coveredDate = todayUK;
@@ -5830,7 +6037,12 @@
                     date: todayUK, week, day, period,
                     absentTaId: currentActiveTA, absentTaName: absentName,
                     coveringTaId: taId, coveringTaName: coveringTA ? coveringTA.name : taId,
-                    classTitle, teacher: classTeacher, room: classRoom
+                    classTitle, teacher: classTeacher, room: classRoom,
+                    // True only for a Force Assign that bumped the covering TA's
+                    // own class — see submitForceCover / the Staff Shortage
+                    // table in openStatsModal.
+                    staffShortage: !!coveringTaOriginalEntry,
+                    displacedClassTitle: coveringTaOriginalEntry ? getTitleFromStoredHtml(coveringTaOriginalEntry.html) : null
                 });
 
                 // Refresh the Find Cover / Cancel Cover buttons on screen right
@@ -5872,7 +6084,15 @@
                             if (!entry || !entry.coveredDate || entry.coveredDate === today) return;
                             if (entry.preCoverHtml) {
                                 entry.html = entry.preCoverHtml;
+                                // Only set for a Force Assign's covering side (see
+                                // assignCover) — its classData got overwritten to
+                                // the class it was covering, so it needs restoring
+                                // too. The normal absent side never touches
+                                // classData in the first place, so this is a no-op
+                                // there (the field is simply never present).
+                                if (entry.preCoverClassData !== undefined) entry.classData = entry.preCoverClassData;
                                 delete entry.preCoverHtml;
+                                delete entry.preCoverClassData;
                                 delete entry.coveredDate;
                                 delete entry.coverPairTaId;
                             } else {
@@ -5930,16 +6150,30 @@
 
             if (coveringTaId) {
                 const coveringTa = taDatabase.find(t => t.id === coveringTaId);
-                if (coveringTa && coveringTa.timetables[week] && coveringTa.timetables[week][day]) {
-                    delete coveringTa.timetables[week][day][period];
+                const coveringWeekData = coveringTa && coveringTa.timetables[week];
+                const coveringEntry = coveringWeekData && coveringWeekData[day] && coveringWeekData[day][period];
+                // A Force Assign bumped this TA's own class rather than finding
+                // them free (see assignCover's coveringTaOriginalEntry) — that
+                // gets restored here too, the same as the absent side above,
+                // instead of being deleted out from under them.
+                if (coveringEntry && coveringEntry.preCoverHtml) {
+                    coveringEntry.html = coveringEntry.preCoverHtml;
+                    if (coveringEntry.preCoverClassData !== undefined) coveringEntry.classData = coveringEntry.preCoverClassData;
+                    delete coveringEntry.preCoverHtml;
+                    delete coveringEntry.preCoverClassData;
+                    delete coveringEntry.coveredDate;
+                    delete coveringEntry.coverPairTaId;
+                } else if (coveringWeekData && coveringWeekData[day]) {
+                    delete coveringWeekData[day][period];
                 }
                 if (coveringTaId === currentActiveTA) {
                     const coveringCell = document.querySelector(
                         `.timetable-cell.drop-zone[data-week="${week}"][data-day="${day}"][data-period="${period}"]`
                     );
                     if (coveringCell) {
-                        coveringCell.innerHTML = emptyCellContent(coveringCell);
-                        coveringCell.classList.add('empty');
+                        const stillEntry = coveringWeekData && coveringWeekData[day] && coveringWeekData[day][period];
+                        coveringCell.innerHTML = stillEntry ? stillEntry.html : emptyCellContent(coveringCell);
+                        coveringCell.classList.toggle('empty', !stillEntry);
                     }
                 }
             }
@@ -5996,6 +6230,7 @@
             });
 
             renderCoverHistoryTable();
+            renderStaffShortageTable();
 
             document.getElementById('stats-modal').classList.remove('hidden');
         }
@@ -6021,6 +6256,33 @@
                     <td class="px-4 py-2">${escapeHtml(entry.classTitle || '')}</td>
                     <td class="px-4 py-2">${escapeHtml(entry.absentTaName || '')}</td>
                     <td class="px-4 py-2">${escapeHtml(entry.coveringTaName || '')}</td>
+                `;
+                body.appendChild(row);
+            });
+        }
+
+        function renderStaffShortageTable() {
+            const body = document.getElementById('staff-shortage-table-body');
+            if (!body) return;
+            body.innerHTML = '';
+
+            const periodLabels = { '1': 'P1', '2': 'P2', '3': 'P3', '4a': 'P4 (Lunch A)', '4b': 'P4 (Lunch B)', '5': 'P5', '6': 'P6' };
+            const incidents = coverHistory.filter(h => h.staffShortage);
+
+            if (!incidents.length) {
+                body.innerHTML = `<tr><td colspan="5" class="px-4 py-3 text-center text-gray-400 text-sm">No staff shortage incidents recorded</td></tr>`;
+                return;
+            }
+
+            [...incidents].reverse().forEach(entry => {
+                const periodLabel = periodLabels[entry.period] || entry.period;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-4 py-2 whitespace-nowrap">${escapeHtml(entry.date)}</td>
+                    <td class="px-4 py-2 whitespace-nowrap">Week ${escapeHtml(entry.week)} ${escapeHtml(entry.day)}, ${escapeHtml(periodLabel)}</td>
+                    <td class="px-4 py-2">${escapeHtml(entry.coveringTaName || '')}</td>
+                    <td class="px-4 py-2">${escapeHtml(entry.classTitle || '')} (for ${escapeHtml(entry.absentTaName || '')})</td>
+                    <td class="px-4 py-2 text-red-600">${escapeHtml(entry.displacedClassTitle || 'Unknown')}</td>
                 `;
                 body.appendChild(row);
             });
