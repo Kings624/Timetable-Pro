@@ -1488,15 +1488,29 @@
          Cover / Force Assign events involving them that they haven't
          acknowledged yet. See checkCoverAcknowledgment / acknowledgeCoverNotices,
          called whenever that TA's timetable loads. Not gated by the edit
-         lock — anyone can confirm they've seen their own notice. -->
+         lock — anyone can confirm they've seen their own notice.
+
+         This app has no real per-user login — "currently selected TA" is
+         just a dropdown, not an authenticated identity — so whoever is
+         browsing (e.g. Janice checking everyone's timetable in turn) could
+         otherwise reflexively dismiss a notice that was never actually seen
+         by the person it's for. The TA's name is shown prominently and
+         acknowledging requires an explicit "yes, that's me" rather than a
+         single generic "OK", so someone just passing through can back out
+         via "Not me" without falsely marking it seen — a soft self-check,
+         not real authentication, consistent with the rest of this app. -->
     <div id="cover-ack-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-60 z-50 flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-200 bg-amber-50">
-                <h3 class="font-bold text-amber-900 text-lg flex items-center gap-2">📢 Today's Cover Notice</h3>
+                <h3 class="font-bold text-amber-900 text-lg flex items-center gap-2">📢 Cover Notice for <span id="cover-ack-ta-name" class="underline"></span></h3>
+                <p class="text-xs text-amber-700 mt-1">Only confirm if you're actually <span id="cover-ack-ta-name-2"></span> — if you're just browsing their timetable, use "Not me" below instead.</p>
             </div>
             <div class="p-6">
                 <div id="cover-ack-list" class="space-y-3 mb-4"></div>
-                <button onclick="acknowledgeCoverNotices()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg px-4 py-2.5">I understand, got it</button>
+                <div class="flex gap-2">
+                    <button onclick="dismissCoverAckModal()" class="flex-1 px-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50">Not me — just browsing</button>
+                    <button onclick="acknowledgeCoverNotices()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg px-4 py-2.5 text-sm">Yes, that's me — I understand</button>
+                </div>
             </div>
         </div>
     </div>
@@ -4416,6 +4430,10 @@
             }
 
             pendingAckEntries = pending;
+            const activeTa = taDatabase.find(t => t.id === currentActiveTA);
+            const activeName = activeTa ? taDisplayName(activeTa) : currentActiveTA;
+            document.getElementById('cover-ack-ta-name').textContent = activeName;
+            document.getElementById('cover-ack-ta-name-2').textContent = activeName;
             const list = document.getElementById('cover-ack-list');
             list.innerHTML = pending.map(h => {
                 const periodLabel = COVER_PERIOD_LABELS[h.period] || h.period;
@@ -4426,6 +4444,15 @@
                 return `<div class="bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-2.5 rounded-lg">${message}</div>`;
             }).join('');
             modal.classList.remove('hidden');
+        }
+
+        // "Not me — just browsing": closes the modal WITHOUT acknowledging
+        // anything, so it reappears the next time the actual person this
+        // notice belongs to selects themselves — see the note on
+        // #cover-ack-modal for why this exists.
+        function dismissCoverAckModal() {
+            pendingAckEntries = [];
+            document.getElementById('cover-ack-modal').classList.add('hidden');
         }
 
         // Marks every notice currently shown in the modal as acknowledged by
