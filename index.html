@@ -1148,14 +1148,33 @@
          a new update ships, then not again until the next one. See
          CHANGELOG_VERSION / showChangelogIfNew, called from submitPinModal. -->
     <div id="changelog-modal" class="hidden fixed inset-0 bg-slate-950 bg-opacity-70 flex items-center justify-center z-[70]">
-        <div class="relative bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-400/40 rounded-xl shadow-[0_0_40px_-8px_rgba(34,211,238,0.45)] p-6 w-96 font-mono">
+        <div class="relative bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-400/40 rounded-xl shadow-[0_0_40px_-8px_rgba(34,211,238,0.45)] p-6 w-[26rem] max-h-[85vh] overflow-y-auto font-mono">
             <span class="absolute -top-4 -left-3 text-2xl drop-shadow-[0_0_8px_rgba(250,204,21,0.7)]" title="Admin update">👑</span>
             <h2 class="text-sm font-bold text-cyan-300 mb-1 flex items-center gap-1.5 tracking-widest">
                 <span class="text-cyan-400">&gt;_</span> WHAT'S NEW
             </h2>
-            <p class="text-[11px] text-slate-500 mb-3 tracking-wide">// since your last visit</p>
+            <p class="text-[11px] text-slate-500 mb-3 tracking-wide">// since your last visit · <span id="changelog-today-count">0</span> update(s) shipped today</p>
             <ul id="changelog-list" class="text-[13px] text-slate-200 space-y-2 mb-5 leading-snug"></ul>
             <button onclick="closeChangelogModal()" class="w-full px-3 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-900 text-sm font-bold tracking-widest transition-colors">GOT IT</button>
+        </div>
+    </div>
+
+    <!-- Developer changelog — identity-gated version for Janice/Antonia
+         specifically. See CHANGELOG_ACK_TARGET_TAS / checkChangelogAcknowledgment
+         for why this exists alongside the general #changelog-modal above. -->
+    <div id="changelog-ack-modal" class="hidden fixed inset-0 bg-slate-950 bg-opacity-70 z-[70] flex items-center justify-center backdrop-blur-sm">
+        <div class="relative bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-400/40 rounded-xl shadow-[0_0_40px_-8px_rgba(34,211,238,0.45)] p-6 w-[26rem] max-h-[85vh] overflow-y-auto font-mono">
+            <span class="absolute -top-4 -left-3 text-2xl drop-shadow-[0_0_8px_rgba(250,204,21,0.7)]">👑</span>
+            <h2 class="text-sm font-bold text-cyan-300 mb-1 flex items-center gap-1.5 tracking-widest">
+                <span class="text-cyan-400">&gt;_</span> DEV LOG for <span id="changelog-ack-ta-name" class="underline"></span>
+            </h2>
+            <p class="text-[11px] text-slate-500 mb-1 tracking-wide">// <span id="changelog-ack-today-count">0</span> update(s) shipped today</p>
+            <p class="text-[11px] text-amber-400/90 mb-3">Only confirm if you're actually <span id="changelog-ack-ta-name-2"></span> — if you're just browsing, use "Not me" below instead.</p>
+            <ul id="changelog-ack-list" class="text-[13px] text-slate-200 space-y-2 mb-5 leading-snug"></ul>
+            <div class="flex gap-2">
+                <button onclick="dismissChangelogAckModal()" class="flex-1 px-3 py-2.5 rounded-lg border border-slate-600 text-sm text-slate-300 hover:bg-slate-800">Not me — just browsing</button>
+                <button onclick="acknowledgeChangelog()" class="flex-1 bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-bold rounded-lg px-4 py-2.5 text-sm">Yes, I've read this</button>
+            </div>
         </div>
     </div>
 
@@ -2033,19 +2052,106 @@
 
         // Bump CHANGELOG_VERSION and update CHANGELOG_ITEMS with every shipped
         // update — see showChangelogIfNew, called on a successful shared-PIN
-        // unlock ("admin login" — the closest thing this app has to one).
-        // Stored per-device in localStorage (not synced), so it's shown once
-        // per browser the first time it unlocks after a new version ships.
-        // Only list things a user actually benefits from — for a purely
-        // visual/cosmetic pass with nothing functionally new, just write
-        // "Cosmetic polish" rather than describing the visual details.
-        const CHANGELOG_VERSION = '2026-09-16-3';
-        const CHANGELOG_ITEMS = [
-            'Force Assign: when every TA is genuinely busy, an admin can now manually force one to cover anyway (its own separate PIN) — their own class is preserved and comes back automatically the next day.',
-            'Staff shortages from Force Assign are now logged in Stats.',
-            'A banner now announces today\'s cover assignments right on your timetable — no more hunting for the struck-through or green block.',
-            'Fixed the "+ Add class" form getting cut off instead of showing fully.'
+        // unlock ("admin login" — the closest thing this app has to one), and
+        // checkChangelogAcknowledgment, the identity-gated version shown to
+        // Janice/Antonia specifically (see CHANGELOG_ACK_TARGET_TAS below).
+        // Stored per-device in localStorage (not synced) for the general
+        // modal, so it's shown once per browser the first time it unlocks
+        // after a new version ships; the identity-gated one is instead
+        // stored per-TA (ta.changelogAckVersion) so it follows the person
+        // across devices.
+        //
+        // Each item is either:
+        //   { type: 'feature', summary: '...', steps: ['...', '...'] } — an
+        //     actual functional change; write a real step-by-step tutorial.
+        //   { type: 'minor', summary: '...' } — a bug fix or cosmetic-only
+        //     pass; keep it to one plain sentence, no steps.
+        const CHANGELOG_VERSION = '2026-09-16-4';
+        // One entry per shipped CHANGELOG_VERSION — append (never edit past
+        // entries) whenever CHANGELOG_VERSION bumps, so "shipped today" is
+        // read off real history instead of guessed. Seeded with the two
+        // versions shipped earlier today, before this history array existed.
+        const CHANGELOG_HISTORY = [
+            { version: '2026-09-16-2', date: '2026-09-16' },
+            { version: '2026-09-16-3', date: '2026-09-16' },
+            { version: '2026-09-16-4', date: '2026-09-16' }
         ];
+        const CHANGELOG_ITEMS = [
+            {
+                type: 'feature',
+                summary: 'Cover notices now ask you to confirm it\'s really you',
+                steps: [
+                    'Select your name in the TA dropdown as usual.',
+                    'If you\'re involved in today\'s cover (covering someone, or someone covering you), a popup appears explaining exactly what it\'s for.',
+                    'If it really is you, press "Yes, that\'s me — I understand".',
+                    'If you\'re just browsing someone else\'s timetable, press "Not me — just browsing" instead — the popup will wait and show again for the real person.'
+                ]
+            },
+            {
+                type: 'feature',
+                summary: 'Stats, Compare Mode, and Export All are now admin-only',
+                steps: [
+                    'These three now need the admin PIN unlocked first, same as editing a timetable.',
+                    'Without unlocking, clicking any of them shows a "View only" message instead of opening.',
+                    'Search and exporting your own single timetable to PDF still work for everyone, locked or not.'
+                ]
+            },
+            {
+                type: 'feature',
+                summary: 'Stats tables now page through long lists and export to CSV',
+                steps: [
+                    'Open Stats (admin only) — any tab with more than 10 rows now shows Prev/Next controls at the bottom.',
+                    'Overview, Cover Log, Staff Shortage, and Acknowledgments each page independently, so switching tabs keeps your place in the others.',
+                    'Press "Export CSV" at the top of any tab to download that tab\'s full data (not just the page you\'re viewing) as a spreadsheet-ready file.'
+                ]
+            },
+            {
+                type: 'feature',
+                summary: 'Stats Overview now shows each TA\'s free-period rate',
+                steps: [
+                    'Open Stats → Overview tab.',
+                    'The new "Free Period Rate" column shows a bar and percentage of that TA\'s non-lunch periods (across both weeks) with no class assigned.',
+                    'Hover over the bar for the exact count, e.g. "12 of 50 periods free".'
+                ]
+            },
+            {
+                type: 'feature',
+                summary: 'Data Setup\'s Export/Import now uses Excel (.xlsx), not .json',
+                steps: [
+                    'Open Data Setup → "Export Data (.xlsx)" — downloads one Excel file with readable sheets (Class Needs, TA List, Students) you can open and check directly, plus a hidden "Backup (raw)" sheet.',
+                    'To restore everything exactly later, use "Import Data (.xlsx)" and pick that same downloaded file.',
+                    'Don\'t rename the "Backup (raw)" sheet or edit its cells — the visible sheets are just for reading, only that hidden one is actually used to restore your data.'
+                ]
+            },
+            { type: 'minor', summary: 'Fixed: Cancel Cover now correctly undoes the absence/cover counts it added, instead of leaving a permanent +1 behind in Stats.' },
+            { type: 'minor', summary: 'Fixed: a long covering TA\'s name no longer squeezes out or overflows the original class title on a cover block.' },
+            { type: 'minor', summary: 'Added a short explanation under the Staff Shortage and Acknowledgments tabs in Stats.' }
+        ];
+
+        function changelogShippedTodayCount() {
+            const today = getUKDateString();
+            return CHANGELOG_HISTORY.filter(h => h.date === today).length;
+        }
+
+        // Shared between the general "WHAT'S NEW" modal and the identity-
+        // gated one below — same content, same rendering, different gate.
+        function renderChangelogItemsHtml() {
+            return CHANGELOG_ITEMS.map(item => {
+                if (item.type === 'feature') {
+                    const steps = item.steps.map(s => `<li>${escapeHtml(s)}</li>`).join('');
+                    return `<li class="border border-cyan-400/20 rounded-lg p-2.5 bg-slate-900/40">
+                        <div class="flex items-center gap-2 mb-1.5">
+                            <span class="text-cyan-400">▸</span>
+                            <span class="font-semibold text-cyan-100">${escapeHtml(item.summary)}</span>
+                            <span class="ml-auto shrink-0 text-[9px] uppercase tracking-wider text-cyan-400/80 border border-cyan-400/30 rounded px-1.5 py-0.5">Feature</span>
+                        </div>
+                        <ol class="list-decimal list-inside text-[12px] text-slate-300 space-y-1 pl-1">${steps}</ol>
+                    </li>`;
+                }
+                return `<li class="flex gap-2"><span class="text-slate-500 shrink-0">·</span><span class="text-slate-300">${escapeHtml(item.summary)}</span></li>`;
+            }).join('');
+        }
+
         function showChangelogIfNew() {
             let seen = null;
             try { seen = localStorage.getItem('ta_timetable_last_seen_changelog'); } catch (e) {}
@@ -2053,14 +2159,94 @@
             const modal = document.getElementById('changelog-modal');
             const list = document.getElementById('changelog-list');
             if (!modal || !list) return;
-            list.innerHTML = CHANGELOG_ITEMS.map(item =>
-                `<li class="flex gap-2"><span class="text-cyan-400 shrink-0">▸</span><span>${escapeHtml(item)}</span></li>`
-            ).join('');
+            const countEl = document.getElementById('changelog-today-count');
+            if (countEl) countEl.textContent = changelogShippedTodayCount();
+            list.innerHTML = renderChangelogItemsHtml();
             modal.classList.remove('hidden');
             try { localStorage.setItem('ta_timetable_last_seen_changelog', CHANGELOG_VERSION); } catch (e) {}
         }
         function closeChangelogModal() {
             document.getElementById('changelog-modal').classList.add('hidden');
+        }
+
+        // Same soft self-identification pattern as #cover-ack-modal, applied
+        // to the developer changelog — but only for these two people, since
+        // "seen it in this browser" (the localStorage flag showChangelogIfNew
+        // uses) isn't good enough for a message that's actually meant for
+        // them by name; they need to each confirm on whichever device they
+        // happen to be using. Everyone else still gets the general,
+        // PIN-unlock-triggered "WHAT'S NEW" modal above, unchanged.
+        const CHANGELOG_ACK_TARGET_TAS = ['janice', 'antonia'];
+
+        function checkChangelogAcknowledgment() {
+            const modal = document.getElementById('changelog-ack-modal');
+            if (!modal) return;
+            if (!CHANGELOG_ACK_TARGET_TAS.includes(currentActiveTA)) { modal.classList.add('hidden'); return; }
+            // Don't stack on top of a pending cover notice — that one's
+            // today-specific and time-sensitive; this one isn't, so it can
+            // wait until the cover notice is dealt with one way or another.
+            const coverModal = document.getElementById('cover-ack-modal');
+            if (coverModal && !coverModal.classList.contains('hidden')) return;
+
+            const ta = taDatabase.find(t => t.id === currentActiveTA);
+            if (!ta || ta.changelogAckVersion === CHANGELOG_VERSION) {
+                modal.classList.add('hidden');
+                return;
+            }
+
+            const name = taDisplayName(ta);
+            document.getElementById('changelog-ack-ta-name').textContent = name;
+            document.getElementById('changelog-ack-ta-name-2').textContent = name;
+            document.getElementById('changelog-ack-today-count').textContent = changelogShippedTodayCount();
+            document.getElementById('changelog-ack-list').innerHTML = renderChangelogItemsHtml();
+            modal.classList.remove('hidden');
+        }
+
+        // "Not me — just browsing": closes without acknowledging, so it
+        // reappears next time the actual person selects themselves.
+        function dismissChangelogAckModal() {
+            document.getElementById('changelog-ack-modal').classList.add('hidden');
+        }
+
+        // Marks the changelog as read by whichever of Janice/Antonia is
+        // active, then syncs just that one field to the shared cloud right
+        // away (merged into a freshly-fetched copy of the remote TA, not
+        // this tab's possibly-stale whole taDatabase — same care as
+        // persistSharedAdminPin) so it can't clobber someone else's more
+        // recent timetable edit in between.
+        async function acknowledgeChangelog() {
+            const ta = taDatabase.find(t => t.id === currentActiveTA);
+            if (!ta) return;
+            ta.changelogAckVersion = CHANGELOG_VERSION;
+            ta.changelogAckAt = new Date().toISOString();
+            document.getElementById('changelog-ack-modal').classList.add('hidden');
+            saveStateToStorage();
+
+            if (!isCloudConfigured()) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('app_state')
+                    .select('data')
+                    .eq('id', SUPABASE_ROW_ID)
+                    .single();
+                if (error) throw error;
+                const remoteData = (data && data.data) || {};
+                if (Array.isArray(remoteData.taDatabase)) {
+                    const remoteTa = remoteData.taDatabase.find(t => t.id === ta.id);
+                    if (remoteTa) {
+                        remoteTa.changelogAckVersion = ta.changelogAckVersion;
+                        remoteTa.changelogAckAt = ta.changelogAckAt;
+                    }
+                }
+                remoteData.savedAt = new Date().toISOString();
+                const { error: upsertError } = await supabaseClient
+                    .from('app_state')
+                    .upsert({ id: SUPABASE_ROW_ID, data: remoteData, updated_at: new Date().toISOString() });
+                if (upsertError) throw upsertError;
+                lastKnownRemoteSavedAt = remoteData.savedAt;
+            } catch (e) {
+                console.error('Failed to sync changelog acknowledgment to cloud:', e);
+            }
         }
 
         // Call at the top of any function that mutates shared timetable
@@ -4470,6 +4656,7 @@
             });
             initCoverButtons();
             checkCoverAcknowledgment();
+            checkChangelogAcknowledgment();
         }
 
         // Shared Week/Day/Period labels for anywhere cover events get listed
@@ -4525,6 +4712,7 @@
         function dismissCoverAckModal() {
             pendingAckEntries = [];
             document.getElementById('cover-ack-modal').classList.add('hidden');
+            checkChangelogAcknowledgment(); // was held back while this modal was up
         }
 
         // Marks every notice currently shown in the modal as acknowledged by
@@ -4545,6 +4733,7 @@
             });
             pendingAckEntries = [];
             document.getElementById('cover-ack-modal').classList.add('hidden');
+            checkChangelogAcknowledgment(); // was held back while this modal was up
             saveStateToStorage();
             renderAcknowledgmentsTable(); // live-refresh Stats' Acknowledgments tab if it's open
 
