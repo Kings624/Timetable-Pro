@@ -5363,17 +5363,19 @@
                             return;
                         }
 
-                        // Same idea as the week check above, but a heads-up rather than a
-                        // hard block — a class dragged to a different day/period than it
-                        // was originally scheduled for is often a genuine mistake (this is
-                        // exactly how a class ends up on the wrong day), but sometimes a
-                        // deliberate reschedule, so it's allowed through with a warning
-                        // rather than bounced back like the Week mismatch above.
+                        // Same rule as the Week check above, and just as hard a block — a
+                        // real class's day/period is fixed for the whole term (a student's
+                        // Monday Period 1 is always Monday Period 1), so it can't silently
+                        // end up on the wrong day either. This used to be a warning that let
+                        // the drop through anyway, which defeated the point: a misplacement
+                        // is exactly what this is supposed to catch. Manually-entered classes
+                        // carry no day/period of their own, so they're exempt, same as Week.
                         if (draggedCd.day && draggedCd.period && zone.dataset.day && zone.dataset.period &&
                             (draggedCd.day !== zone.dataset.day || draggedCd.period !== zone.dataset.period)) {
-                            alert('Heads up: "' + (draggedCd.title || 'This class') + '" was originally scheduled for ' +
-                                draggedCd.day + ' Period ' + draggedCd.period + ', but you\'re placing it in ' +
+                            alert('"' + (draggedCd.title || 'This class') + '" is scheduled for ' +
+                                draggedCd.day + ' Period ' + draggedCd.period + ' — it can\'t be placed in ' +
                                 zone.dataset.day + ' Period ' + zone.dataset.period + '.');
+                            return;
                         }
 
                         // Dragging a specific student's period onto a TA — check for a
