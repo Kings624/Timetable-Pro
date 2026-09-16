@@ -1150,10 +1150,13 @@
     <div id="changelog-modal" class="hidden fixed inset-0 bg-slate-950 bg-opacity-70 flex items-center justify-center z-[70]">
         <div class="relative bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-400/40 rounded-xl shadow-[0_0_40px_-8px_rgba(34,211,238,0.45)] p-6 w-[26rem] max-h-[85vh] overflow-y-auto font-mono">
             <span class="absolute -top-4 -left-3 text-2xl drop-shadow-[0_0_8px_rgba(250,204,21,0.7)]" title="Admin update">👑</span>
-            <h2 class="text-sm font-bold text-cyan-300 mb-1 flex items-center gap-1.5 tracking-widest">
+            <h2 class="text-sm font-bold text-cyan-300 mb-2 flex items-center gap-1.5 tracking-widest">
                 <span class="text-cyan-400">&gt;_</span> WHAT'S NEW
             </h2>
-            <p class="text-[11px] text-slate-500 mb-3 tracking-wide">// since your last visit · <span id="changelog-today-count">0</span> update(s) shipped today</p>
+            <div class="mb-3 flex items-center gap-2">
+                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-slate-900 bg-cyan-400 rounded-full px-2.5 py-1 shadow-[0_0_12px_-1px_rgba(34,211,238,0.7)]">🚀 <span id="changelog-today-count">0</span> shipped today</span>
+                <span class="text-[10px] text-slate-500 tracking-wide">since your last visit</span>
+            </div>
             <ul id="changelog-list" class="text-[13px] text-slate-200 space-y-2 mb-5 leading-snug"></ul>
             <button onclick="closeChangelogModal()" class="w-full px-3 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-900 text-sm font-bold tracking-widest transition-colors">GOT IT</button>
         </div>
@@ -1165,10 +1168,12 @@
     <div id="changelog-ack-modal" class="hidden fixed inset-0 bg-slate-950 bg-opacity-70 z-[70] flex items-center justify-center backdrop-blur-sm">
         <div class="relative bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-400/40 rounded-xl shadow-[0_0_40px_-8px_rgba(34,211,238,0.45)] p-6 w-[26rem] max-h-[85vh] overflow-y-auto font-mono">
             <span class="absolute -top-4 -left-3 text-2xl drop-shadow-[0_0_8px_rgba(250,204,21,0.7)]">👑</span>
-            <h2 class="text-sm font-bold text-cyan-300 mb-1 flex items-center gap-1.5 tracking-widest">
-                <span class="text-cyan-400">&gt;_</span> DEV LOG for <span id="changelog-ack-ta-name" class="underline"></span>
+            <h2 class="text-sm font-bold text-cyan-300 mb-2 flex items-center gap-1.5 tracking-widest">
+                <span class="text-cyan-400">&gt;_</span> DEV LOG for <span id="changelog-ack-ta-name" class="underline"></span> <span id="changelog-ack-janice-flair" class="hidden">🌷✨</span>
             </h2>
-            <p class="text-[11px] text-slate-500 mb-1 tracking-wide">// <span id="changelog-ack-today-count">0</span> update(s) shipped today</p>
+            <div class="mb-2">
+                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-slate-900 bg-cyan-400 rounded-full px-2.5 py-1 shadow-[0_0_12px_-1px_rgba(34,211,238,0.7)]">🚀 <span id="changelog-ack-today-count">0</span> shipped today</span>
+            </div>
             <p class="text-[11px] text-amber-400/90 mb-3">Only confirm if you're actually <span id="changelog-ack-ta-name-2"></span> — if you're just browsing, use "Not me" below instead.</p>
             <ul id="changelog-ack-list" class="text-[13px] text-slate-200 space-y-2 mb-5 leading-snug"></ul>
             <div class="flex gap-2">
@@ -1542,8 +1547,14 @@
 
     <!-- Stats Dashboard -->
     <div id="stats-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+        <!-- Sized to fit its content by default (not a one-size-fits-all
+             fixed width that felt cramped on the wider tabs like
+             Acknowledgments and too roomy on Overview) — and resizable via
+             the native bottom-right drag handle (same technique as
+             #janice-notes-panel) since a fixed admin's actual screen/window
+             size varies a lot more than a single default ever could fit. -->
+        <div id="stats-modal-card" class="bg-white rounded-xl shadow-2xl flex flex-col" style="width: min(1120px, 95vw); height: min(78vh, 720px); min-width: 640px; min-height: 420px; max-width: 97vw; max-height: 94vh; resize: both; overflow: hidden;" title="Drag the bottom-right corner to resize">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
                 <h3 class="font-bold text-gray-800 text-lg flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -1559,14 +1570,14 @@
             <!-- Tabs — split out once Acknowledgments joined Cover Log and Staff
                  Shortage below the main table; one continuous scroll was
                  getting crowded. -->
-            <div class="px-6 pt-3 border-b border-gray-200 flex gap-2">
+            <div class="px-6 pt-3 border-b border-gray-200 flex gap-2 shrink-0">
                 <button id="stats-tab-btn-overview" class="tab-btn active px-4 py-2 text-sm" onclick="switchStatsTab('overview')">Overview</button>
                 <button id="stats-tab-btn-coverlog" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('coverlog')">Cover Log</button>
                 <button id="stats-tab-btn-shortage" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('shortage')">Staff Shortage</button>
                 <button id="stats-tab-btn-acks" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('acks')">Acknowledgments</button>
             </div>
 
-            <div class="p-6 overflow-y-auto">
+            <div class="p-6 overflow-y-auto flex-1 min-h-0">
                 <div id="stats-tab-overview">
                     <div class="flex justify-end mb-2">
                         <button onclick="exportStatsOverviewCsv()" class="flex items-center gap-1.5 text-xs text-gray-600 hover:text-indigo-700 border border-gray-200 hover:border-indigo-200 rounded-md px-2.5 py-1.5 transition-colors">
@@ -2062,10 +2073,12 @@
         // across devices.
         //
         // Each item is either:
-        //   { type: 'feature', summary: '...', steps: ['...', '...'] } — an
-        //     actual functional change; write a real step-by-step tutorial.
-        //   { type: 'minor', summary: '...' } — a bug fix or cosmetic-only
-        //     pass; keep it to one plain sentence, no steps.
+        //   { type: 'feature', emoji: '...', summary: '...', steps: ['...', '...'] }
+        //     — an actual functional change; a short punchy title (the emoji
+        //     is part of what makes it scannable) plus 1-2 terse how-to steps,
+        //     not a full paragraph.
+        //   { type: 'minor', emoji: '...', summary: '...' } — a bug fix or
+        //     cosmetic-only pass; one short sentence, no steps.
         const CHANGELOG_VERSION = '2026-09-16-4';
         // One entry per shipped CHANGELOG_VERSION — append (never edit past
         // entries) whenever CHANGELOG_VERSION bumps, so "shipped today" is
@@ -2079,53 +2092,52 @@
         const CHANGELOG_ITEMS = [
             {
                 type: 'feature',
-                summary: 'Cover notices now ask you to confirm it\'s really you',
+                emoji: '🛡️',
+                summary: 'Cover notices now confirm it\'s really you',
                 steps: [
-                    'Select your name in the TA dropdown as usual.',
-                    'If you\'re involved in today\'s cover (covering someone, or someone covering you), a popup appears explaining exactly what it\'s for.',
-                    'If it really is you, press "Yes, that\'s me — I understand".',
-                    'If you\'re just browsing someone else\'s timetable, press "Not me — just browsing" instead — the popup will wait and show again for the real person.'
+                    'Involved in today\'s cover? A popup explains it when you select your name.',
+                    '"Yes, that\'s me" to confirm — or "Not me" if you\'re just browsing.'
                 ]
             },
             {
                 type: 'feature',
-                summary: 'Stats, Compare Mode, and Export All are now admin-only',
+                emoji: '🔒',
+                summary: 'Stats, Compare & Export All are admin-only now',
                 steps: [
-                    'These three now need the admin PIN unlocked first, same as editing a timetable.',
-                    'Without unlocking, clicking any of them shows a "View only" message instead of opening.',
-                    'Search and exporting your own single timetable to PDF still work for everyone, locked or not.'
+                    'Unlock with the admin PIN first, same as editing.',
+                    'Search and your own PDF export still work for everyone.'
                 ]
             },
             {
                 type: 'feature',
-                summary: 'Stats tables now page through long lists and export to CSV',
+                emoji: '📑',
+                summary: 'Stats tables now paginate + export to CSV',
                 steps: [
-                    'Open Stats (admin only) — any tab with more than 10 rows now shows Prev/Next controls at the bottom.',
-                    'Overview, Cover Log, Staff Shortage, and Acknowledgments each page independently, so switching tabs keeps your place in the others.',
-                    'Press "Export CSV" at the top of any tab to download that tab\'s full data (not just the page you\'re viewing) as a spreadsheet-ready file.'
+                    'Long tables get Prev/Next controls; each tab keeps its own page.',
+                    '"Export CSV" grabs that tab\'s full data, not just the page shown.'
                 ]
             },
             {
                 type: 'feature',
-                summary: 'Stats Overview now shows each TA\'s free-period rate',
+                emoji: '📈',
+                summary: 'See each TA\'s free-period rate in Stats',
                 steps: [
-                    'Open Stats → Overview tab.',
-                    'The new "Free Period Rate" column shows a bar and percentage of that TA\'s non-lunch periods (across both weeks) with no class assigned.',
-                    'Hover over the bar for the exact count, e.g. "12 of 50 periods free".'
+                    'Overview tab now has a bar + % of free non-lunch periods.',
+                    'Hover it for the exact count.'
                 ]
             },
             {
                 type: 'feature',
-                summary: 'Data Setup\'s Export/Import now uses Excel (.xlsx), not .json',
+                emoji: '📁',
+                summary: 'Data Setup now exports to Excel (.xlsx)',
                 steps: [
-                    'Open Data Setup → "Export Data (.xlsx)" — downloads one Excel file with readable sheets (Class Needs, TA List, Students) you can open and check directly, plus a hidden "Backup (raw)" sheet.',
-                    'To restore everything exactly later, use "Import Data (.xlsx)" and pick that same downloaded file.',
-                    'Don\'t rename the "Backup (raw)" sheet or edit its cells — the visible sheets are just for reading, only that hidden one is actually used to restore your data.'
+                    '"Export Data" downloads a readable Excel file, backup included.',
+                    '"Import Data" restores everything from that same file.'
                 ]
             },
-            { type: 'minor', summary: 'Fixed: Cancel Cover now correctly undoes the absence/cover counts it added, instead of leaving a permanent +1 behind in Stats.' },
-            { type: 'minor', summary: 'Fixed: a long covering TA\'s name no longer squeezes out or overflows the original class title on a cover block.' },
-            { type: 'minor', summary: 'Added a short explanation under the Staff Shortage and Acknowledgments tabs in Stats.' }
+            { type: 'minor', emoji: '🔧', summary: 'Fixed: Cancel Cover no longer leaves a phantom +1 in Stats.' },
+            { type: 'minor', emoji: '🔧', summary: 'Fixed: long covering-TA names no longer overflow a cover block.' },
+            { type: 'minor', emoji: '🎨', summary: 'Added short explanations to the Staff Shortage and Acknowledgments tabs.' }
         ];
 
         function changelogShippedTodayCount() {
@@ -2133,22 +2145,30 @@
             return CHANGELOG_HISTORY.filter(h => h.date === today).length;
         }
 
+        // A little extra sparkle reserved for Janice's identity-gated modal
+        // specifically (see checkChangelogAcknowledgment) — everyone else,
+        // Antonia included, gets the plain single feature emoji above.
+        // Cycled by index (not random) so it's stable across re-renders.
+        const JANICE_CHANGELOG_EMOJI = ['🌷', '✨', '🌹', '💫', '🌸', '💗', '⭐', '🦋'];
+
         // Shared between the general "WHAT'S NEW" modal and the identity-
         // gated one below — same content, same rendering, different gate.
-        function renderChangelogItemsHtml() {
-            return CHANGELOG_ITEMS.map(item => {
+        // janiceMode adds a bonus decorative emoji per item, just for her.
+        function renderChangelogItemsHtml(janiceMode) {
+            return CHANGELOG_ITEMS.map((item, i) => {
+                const bonus = janiceMode ? ' ' + JANICE_CHANGELOG_EMOJI[i % JANICE_CHANGELOG_EMOJI.length] : '';
+                const title = `${item.emoji} ${escapeHtml(item.summary)}${bonus}`;
                 if (item.type === 'feature') {
                     const steps = item.steps.map(s => `<li>${escapeHtml(s)}</li>`).join('');
-                    return `<li class="border border-cyan-400/20 rounded-lg p-2.5 bg-slate-900/40">
-                        <div class="flex items-center gap-2 mb-1.5">
-                            <span class="text-cyan-400">▸</span>
-                            <span class="font-semibold text-cyan-100">${escapeHtml(item.summary)}</span>
+                    return `<li class="border border-cyan-400/20 rounded-lg p-2 bg-slate-900/40">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="font-semibold text-cyan-100">${title}</span>
                             <span class="ml-auto shrink-0 text-[9px] uppercase tracking-wider text-cyan-400/80 border border-cyan-400/30 rounded px-1.5 py-0.5">Feature</span>
                         </div>
-                        <ol class="list-decimal list-inside text-[12px] text-slate-300 space-y-1 pl-1">${steps}</ol>
+                        <ol class="list-decimal list-inside text-[12px] text-slate-300 space-y-0.5 pl-1">${steps}</ol>
                     </li>`;
                 }
-                return `<li class="flex gap-2"><span class="text-slate-500 shrink-0">·</span><span class="text-slate-300">${escapeHtml(item.summary)}</span></li>`;
+                return `<li class="flex gap-2 text-[13px]"><span class="text-slate-300">${title}</span></li>`;
             }).join('');
         }
 
@@ -2161,7 +2181,7 @@
             if (!modal || !list) return;
             const countEl = document.getElementById('changelog-today-count');
             if (countEl) countEl.textContent = changelogShippedTodayCount();
-            list.innerHTML = renderChangelogItemsHtml();
+            list.innerHTML = renderChangelogItemsHtml(false);
             modal.classList.remove('hidden');
             try { localStorage.setItem('ta_timetable_last_seen_changelog', CHANGELOG_VERSION); } catch (e) {}
         }
@@ -2194,11 +2214,14 @@
                 return;
             }
 
+            const isJanice = currentActiveTA === 'janice';
             const name = taDisplayName(ta);
             document.getElementById('changelog-ack-ta-name').textContent = name;
             document.getElementById('changelog-ack-ta-name-2').textContent = name;
             document.getElementById('changelog-ack-today-count').textContent = changelogShippedTodayCount();
-            document.getElementById('changelog-ack-list').innerHTML = renderChangelogItemsHtml();
+            document.getElementById('changelog-ack-list').innerHTML = renderChangelogItemsHtml(isJanice);
+            const flair = document.getElementById('changelog-ack-janice-flair');
+            if (flair) flair.classList.toggle('hidden', !isJanice);
             modal.classList.remove('hidden');
         }
 
