@@ -1469,7 +1469,7 @@
                      Only relevant to actually covering an absence, not the "place" mode
                      used for an unplaced student card, so openCoverModal hides it there. -->
                 <div id="force-cover-section" class="mt-4 border-t border-gray-200 pt-3">
-                    <button type="button" id="force-cover-toggle-btn" onclick="toggleForceCoverPanel()" class="text-xs text-red-600 hover:text-red-700 font-medium flex items-center gap-1">
+                    <button type="button" onclick="toggleForceCoverPanel()" class="text-xs text-red-600 hover:text-red-700 font-medium flex items-center gap-1">
                         ⚠️ Admin Override: Force Assign a Busy TA
                     </button>
                     <div id="force-cover-panel" class="hidden mt-3 bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
@@ -1764,7 +1764,7 @@
                         </div>
                         <h4 id="student-grid-title" class="text-sm font-semibold text-gray-700 mb-2"></h4>
                         <div class="overflow-x-auto">
-                            <table class="min-w-full text-xs border border-gray-200" id="student-grid-table">
+                            <table class="min-w-full text-xs border border-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="px-2 py-2 border border-gray-200 text-left">Period</th>
