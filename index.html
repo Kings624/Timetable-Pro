@@ -376,6 +376,13 @@
             background-color: #d97706;
         }
 
+        .cover-btn.cancel-cover-btn {
+            background-color: #dc2626; /* Tailwind red-600 */
+        }
+        .cover-btn.cancel-cover-btn:hover {
+            background-color: #b91c1c;
+        }
+
         /* Cover button only shows on hover over a class block */
         .class-block:hover .cover-btn {
             display: block;
@@ -3505,6 +3512,7 @@
             if (!ta) return;
 
             ['A', 'B'].forEach(week => {
+                const previousWeekData = ta.timetables[week] || {};
                 ta.timetables[week] = {};
                 const body = document.getElementById(`timetable-body-${week.toLowerCase()}`);
                 const cells = body.querySelectorAll('.timetable-cell');
@@ -3514,10 +3522,24 @@
                     const block = cell.querySelector('.class-block');
                     if (block) {
                         if (!ta.timetables[week][day]) ta.timetables[week][day] = {};
-                        ta.timetables[week][day][period] = {
+                        const newEntry = {
                             html: block.outerHTML,
                             classData: block.dataset.classData || ''
                         };
+                        // A Find Cover assignment tags its entry with extra fields
+                        // (coveredDate/preCoverHtml/coverPairTaId — see assignCover)
+                        // that this rebuild-from-DOM pass would otherwise silently
+                        // drop every time it runs (every TA switch, undo/redo, Data
+                        // Setup apply) — breaking the one-day expiry and Cancel
+                        // Cover for any TA not on screen when that happens. Carry
+                        // them forward from whatever was in this same slot before.
+                        const oldEntry = previousWeekData[day] && previousWeekData[day][period];
+                        if (oldEntry) {
+                            if (oldEntry.coveredDate) newEntry.coveredDate = oldEntry.coveredDate;
+                            if (oldEntry.preCoverHtml) newEntry.preCoverHtml = oldEntry.preCoverHtml;
+                            if (oldEntry.coverPairTaId) newEntry.coverPairTaId = oldEntry.coverPairTaId;
+                        }
+                        ta.timetables[week][day][period] = newEntry;
                     }
                 });
             });
@@ -4300,21 +4322,28 @@
             if (!block || !block.dataset.classData) return;
             const cell = block.closest('.drop-zone');
             if (!cell) return;
+
+            // A cover pair has its own dedicated restore path — cancelCoverForSlot
+            // puts the absent TA's block back exactly as it looked before the
+            // cover, rather than sending the (now stale) struck-through markup to
+            // the unassigned list the way a normal placement's cancel does below.
+            // Route both sides of a cover pair there instead, so right-click and
+            // the visible "Cancel Cover" button behave identically.
+            if (block.dataset.coverRef) {
+                const ref = JSON.parse(block.dataset.coverRef);
+                cancelCoverForSlot(currentActiveTA, ref.week, ref.day, ref.period);
+                return;
+            }
+            if (block.dataset.coverOrigin) {
+                const ref = JSON.parse(decodeURIComponent(block.dataset.coverOrigin));
+                cancelCoverForSlot(ref.taId, ref.week, ref.day, ref.period);
+                return;
+            }
+
             const confirmed = confirm('Cancel this placement and return it to the unassigned list?');
             if (!confirmed) return;
 
             pushUndoSnapshot();
-
-            // A cover assignment links two blocks on two different TAs' timetables —
-            // cancelling either one (the absent TA's now-covered original, or the
-            // cover entry itself) needs to also clear the other, or it's left behind
-            // permanently pointing at a cover relationship that no longer exists.
-            if (block.dataset.coverRef) {
-                try { clearLinkedCoverBlock(JSON.parse(block.dataset.coverRef)); } catch (e) {}
-            }
-            if (block.dataset.coverOrigin) {
-                try { clearLinkedCoverBlock(JSON.parse(decodeURIComponent(block.dataset.coverOrigin))); } catch (e) {}
-            }
 
             if (isBlockOrphaned(block) || returnToUnassigned(block)) {
                 block.remove();
@@ -4694,10 +4723,27 @@
                 }
             });
             cell.querySelectorAll('.manual-mode-btn').forEach(btn => {
-                btn.addEventListener('click', () => setManualEntryMode(cell, btn.dataset.mode));
+                btn.addEventListener('click', () => {
+                    cell.dataset.manualTouched = '1';
+                    setManualEntryMode(cell, btn.dataset.mode);
+                });
             });
             cell.querySelector('.manual-cancel-btn').addEventListener('click', () => {
                 cell.innerHTML = emptyCellContent(cell);
+            });
+            codeInput.addEventListener('input', () => { cell.dataset.manualTouched = '1'; });
+
+            // Clicking away from an untouched form (nothing typed, mode never
+            // switched) auto-discards it instead of leaving an empty form
+            // sitting open in the cell — Cancel is still there for anyone who
+            // wants to back out explicitly after starting to type.
+            cell.addEventListener('focusout', () => {
+                setTimeout(() => {
+                    if (!cell.isConnected || cell.contains(document.activeElement)) return;
+                    if (cell.dataset.manualTouched === '1') return;
+                    if (!cell.querySelector('.manual-entry-form')) return;
+                    cell.innerHTML = emptyCellContent(cell);
+                }, 150);
             });
             codeInput.focus();
         }
@@ -5421,12 +5467,42 @@
                     });
                 }
 
-                // Always replace the Find Cover button rather than reusing one found in the
-                // markup — the button element itself survives a save/reload cycle (it's
-                // plain HTML), but a handler assigned via `.onclick` does not, so a "stale"
-                // button with no working handler would otherwise be left in place forever.
+                // Always replace the Find Cover / Cancel Cover button rather than reusing
+                // one found in the markup — the button element itself survives a
+                // save/reload cycle (it's plain HTML), but a handler assigned via
+                // `.onclick` does not, so a "stale" button with no working handler
+                // would otherwise be left in place forever.
                 const existingBtn = block.querySelector('.cover-btn');
                 if (existingBtn) existingBtn.remove();
+
+                // data-cover-ref (absent side) / data-cover-origin (covering side) are
+                // set once at assignCover time and — being plain data-* attributes —
+                // survive every save/reload cycle just like any other markup, so they
+                // reliably mark a block as already part of an active cover pair. A
+                // covered slot gets "Cancel Cover" instead of "Find Cover" here, so it
+                // can't be covered a second time — that used to silently double up the
+                // struck-through title text into unreadable, overflowing garbage.
+                if (block.dataset.coverRef || block.dataset.coverOrigin) {
+                    let absentTaId, week, day, period;
+                    if (block.dataset.coverRef) {
+                        const ref = JSON.parse(block.dataset.coverRef);
+                        absentTaId = currentActiveTA;
+                        week = ref.week; day = ref.day; period = ref.period;
+                    } else {
+                        const ref = JSON.parse(decodeURIComponent(block.dataset.coverOrigin));
+                        absentTaId = ref.taId;
+                        week = ref.week; day = ref.day; period = ref.period;
+                    }
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.className = 'cover-btn cancel-cover-btn';
+                    cancelBtn.innerHTML = '✕ Cancel Cover';
+                    cancelBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        cancelCoverForSlot(absentTaId, week, day, period);
+                    };
+                    block.appendChild(cancelBtn);
+                    return;
+                }
 
                 const btn = document.createElement('button');
                 btn.className = 'cover-btn';
@@ -5708,9 +5784,16 @@
                 if (titleEl) {
                     const originalText = titleEl.textContent || '';
                     const taName = coveringTA ? coveringTA.name : 'Unknown';
-                    titleEl.innerHTML = `<del class="text-gray-400">${originalText}</del> <div class="text-green-600 font-bold mt-1 text-xs px-1 py-0.5 bg-green-50 rounded inline-block">Cover: ${taName}</div>`;
+                    // Kept to a single flex row (truncated title + a small badge),
+                    // not a second block-level line — a block-level "Cover: X" line
+                    // stacked under the struck title added a 3rd line to a block
+                    // only ever budgeted for 2, spilling into the row below at the
+                    // enlarged font size. This way the covered block stays exactly
+                    // the same height as a normal one.
+                    titleEl.classList.add('flex', 'items-center', 'gap-1', 'min-w-0');
+                    titleEl.innerHTML = `<del class="text-gray-400 truncate min-w-0" title="${escapeHtml(originalText)}">${escapeHtml(originalText)}</del><span class="text-[10px] text-green-700 bg-green-50 px-1 py-0.5 rounded shrink-0 font-semibold" title="Covered by ${escapeHtml(taName)}">→ ${escapeHtml(taName)}</span>`;
                 }
-                
+
                 currentCoverBlock.draggable = false;
                 currentCoverBlock.classList.remove('draggable-class');
                 const coverBtn = currentCoverBlock.querySelector('.cover-btn');
@@ -5729,13 +5812,19 @@
                 // empty. saveCurrentTimetableState() just rebuilt both
                 // entries from scratch (html + classData only), so these
                 // extra fields have to be attached after it runs, not before.
+                // coverPairTaId records the *other* side of this cover pair on each
+                // entry itself, so a manual "Cancel Cover" (see cancelCoverForSlot)
+                // can find the linked entry directly from taDatabase without having
+                // to parse it back out of either side's saved HTML.
                 const todayUK = getUKDateString();
                 if (coveringTA && coveringTA.timetables[week] && coveringTA.timetables[week][day] && coveringTA.timetables[week][day][period]) {
                     coveringTA.timetables[week][day][period].coveredDate = todayUK;
+                    coveringTA.timetables[week][day][period].coverPairTaId = currentActiveTA;
                 }
                 if (currentTA && currentTA.timetables[week] && currentTA.timetables[week][day] && currentTA.timetables[week][day][period]) {
                     currentTA.timetables[week][day][period].coveredDate = todayUK;
                     currentTA.timetables[week][day][period].preCoverHtml = originalBlockHtml;
+                    currentTA.timetables[week][day][period].coverPairTaId = taId;
                 }
                 coverHistory.push({
                     date: todayUK, week, day, period,
@@ -5743,6 +5832,12 @@
                     coveringTaId: taId, coveringTaName: coveringTA ? coveringTA.name : taId,
                     classTitle, teacher: classTeacher, room: classRoom
                 });
+
+                // Refresh the Find Cover / Cancel Cover buttons on screen right
+                // away, so the just-covered block immediately shows "Cancel
+                // Cover" instead of sitting with no button at all until the
+                // next unrelated re-render (e.g. switching TA and back).
+                initCoverButtons();
             }
             closeCoverModal();
         }
@@ -5779,6 +5874,7 @@
                                 entry.html = entry.preCoverHtml;
                                 delete entry.preCoverHtml;
                                 delete entry.coveredDate;
+                                delete entry.coverPairTaId;
                             } else {
                                 delete weekData[day][period];
                             }
@@ -5802,6 +5898,69 @@
                 initCoverButtons(); // rebind listeners on any freshly-restored blocks — innerHTML never carries them
             }
             return anyChanged;
+        }
+
+        // Manually undo a Find Cover assignment right away, from either side of
+        // the pair (see initCoverButtons — a covered block shows "Cancel Cover"
+        // instead of "Find Cover", so a slot already being covered can't be
+        // covered again, which used to compound broken, doubled-up "Cover: X
+        // Cover: Y" text onto the same block). Unlike revertExpiredCovers (which
+        // runs automatically once the day rolls over and keeps the coverHistory
+        // record), this is an explicit "that was a mistake" action — the cover
+        // never ran its course, so its coverHistory entry is removed too rather
+        // than kept as if it had.
+        function cancelCoverForSlot(absentTaId, week, day, period) {
+            if (!requireEdit()) return;
+            const absentTa = taDatabase.find(t => t.id === absentTaId);
+            const weekData = absentTa && absentTa.timetables[week];
+            const entry = weekData && weekData[day] && weekData[day][period];
+            if (!entry || !entry.preCoverHtml) {
+                showLockToast('Nothing to cancel — this cover has already been cleared.');
+                return;
+            }
+            if (!confirm('Cancel this cover assignment and restore the original schedule?')) return;
+
+            pushUndoSnapshot();
+
+            const coveringTaId = entry.coverPairTaId;
+            entry.html = entry.preCoverHtml;
+            delete entry.preCoverHtml;
+            delete entry.coveredDate;
+            delete entry.coverPairTaId;
+
+            if (coveringTaId) {
+                const coveringTa = taDatabase.find(t => t.id === coveringTaId);
+                if (coveringTa && coveringTa.timetables[week] && coveringTa.timetables[week][day]) {
+                    delete coveringTa.timetables[week][day][period];
+                }
+                if (coveringTaId === currentActiveTA) {
+                    const coveringCell = document.querySelector(
+                        `.timetable-cell.drop-zone[data-week="${week}"][data-day="${day}"][data-period="${period}"]`
+                    );
+                    if (coveringCell) {
+                        coveringCell.innerHTML = emptyCellContent(coveringCell);
+                        coveringCell.classList.add('empty');
+                    }
+                }
+            }
+
+            const today = getUKDateString();
+            const historyIdx = coverHistory.findIndex(h => h.week === week && h.day === day && h.period === period &&
+                h.absentTaId === absentTaId && h.coveringTaId === coveringTaId && h.date === today);
+            if (historyIdx !== -1) coverHistory.splice(historyIdx, 1);
+
+            if (absentTaId === currentActiveTA) {
+                const absentCell = document.querySelector(
+                    `.timetable-cell.drop-zone[data-week="${week}"][data-day="${day}"][data-period="${period}"]`
+                );
+                if (absentCell) {
+                    absentCell.innerHTML = entry.html;
+                    absentCell.classList.remove('empty');
+                }
+            }
+
+            saveStateToStorage();
+            initCoverButtons();
         }
 
         function openStatsModal() {
