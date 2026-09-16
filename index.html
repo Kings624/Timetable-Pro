@@ -1543,6 +1543,12 @@
 
             <div class="p-6 overflow-y-auto">
                 <div id="stats-tab-overview">
+                    <div class="flex justify-end mb-2">
+                        <button onclick="exportStatsOverviewCsv()" class="flex items-center gap-1.5 text-xs text-gray-600 hover:text-indigo-700 border border-gray-200 hover:border-indigo-200 rounded-md px-2.5 py-1.5 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Export CSV
+                        </button>
+                    </div>
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
@@ -1557,6 +1563,7 @@
                             <!-- Stats data will be injected here -->
                         </tbody>
                     </table>
+                    <div id="stats-overview-pagination"></div>
                     <div class="mt-4 text-xs text-gray-500 text-right">*Absence rate calculated against a base of 25 periods per week</div>
                 </div>
 
@@ -1567,6 +1574,12 @@
                      cover the same colleague next time), so this log is the
                      lasting record of past cover events. -->
                 <div id="stats-tab-coverlog" class="hidden">
+                    <div class="flex justify-end mb-2">
+                        <button onclick="exportCoverLogCsv()" class="flex items-center gap-1.5 text-xs text-gray-600 hover:text-indigo-700 border border-gray-200 hover:border-indigo-200 rounded-md px-2.5 py-1.5 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Export CSV
+                        </button>
+                    </div>
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
@@ -1581,6 +1594,7 @@
                             <!-- Cover history rows injected here -->
                         </tbody>
                     </table>
+                    <div id="coverlog-pagination"></div>
                 </div>
 
                 <!-- A Force Assign (see submitForceCover) is the one case where
@@ -1590,6 +1604,12 @@
                      reviewing Stats can see exactly when the school was
                      short-staffed, not just who ultimately covered what. -->
                 <div id="stats-tab-shortage" class="hidden">
+                    <div class="flex justify-end mb-2">
+                        <button onclick="exportStaffShortageCsv()" class="flex items-center gap-1.5 text-xs text-gray-600 hover:text-indigo-700 border border-gray-200 hover:border-indigo-200 rounded-md px-2.5 py-1.5 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Export CSV
+                        </button>
+                    </div>
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
@@ -1604,6 +1624,7 @@
                             <!-- Staff shortage rows injected here -->
                         </tbody>
                     </table>
+                    <div id="shortage-pagination"></div>
                 </div>
 
                 <!-- Whether each side of today's (and past) cover events has
@@ -1613,6 +1634,12 @@
                      Andrew even opened the app today?"); older rows are kept
                      for the record but are no longer actionable. -->
                 <div id="stats-tab-acks" class="hidden">
+                    <div class="flex justify-end mb-2">
+                        <button onclick="exportAcknowledgmentsCsv()" class="flex items-center gap-1.5 text-xs text-gray-600 hover:text-indigo-700 border border-gray-200 hover:border-indigo-200 rounded-md px-2.5 py-1.5 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Export CSV
+                        </button>
+                    </div>
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
@@ -1627,6 +1654,7 @@
                             <!-- Acknowledgment status rows injected here -->
                         </tbody>
                     </table>
+                    <div id="acks-pagination"></div>
                 </div>
             </div>
         </div>
@@ -6408,12 +6436,48 @@
             return { total, filled, free, rate: total ? (free / total * 100) : 0 };
         }
 
-        function openStatsModal() {
-            if (!requireEdit()) return;
+        // ---- Stats pagination — a shared helper + one page-index variable per
+        // tab (each table paginates independently since they can have very
+        // different row counts). Reset to page 0 every time the modal opens,
+        // since the underlying data may have changed since it was last open. ----
+        const STATS_PAGE_SIZE = 10;
+        let statsOverviewPage = 0, coverLogPage = 0, staffShortagePage = 0, ackPage = 0;
+
+        function paginateRows(rows, page, pageSize) {
+            const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+            const clampedPage = Math.min(Math.max(0, page), totalPages - 1);
+            const start = clampedPage * pageSize;
+            return { pageRows: rows.slice(start, start + pageSize), totalPages, clampedPage };
+        }
+
+        function renderPaginationControls(containerId, page, totalPages, changeFnName) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            if (totalPages <= 1) { el.innerHTML = ''; return; }
+            const prevDisabled = page <= 0;
+            const nextDisabled = page >= totalPages - 1;
+            el.innerHTML = `
+                <div class="flex items-center justify-between text-xs text-gray-500 mt-3">
+                    <button onclick="${changeFnName}(${page - 1})" ${prevDisabled ? 'disabled' : ''} class="px-2.5 py-1 rounded border border-gray-200 ${prevDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50 text-gray-700'}">← Prev</button>
+                    <span>Page ${page + 1} of ${totalPages}</span>
+                    <button onclick="${changeFnName}(${page + 1})" ${nextDisabled ? 'disabled' : ''} class="px-2.5 py-1 rounded border border-gray-200 ${nextDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50 text-gray-700'}">Next →</button>
+                </div>
+            `;
+        }
+
+        function goToStatsOverviewPage(p) { statsOverviewPage = p; renderStatsOverviewTable(); }
+        function goToCoverLogPage(p) { coverLogPage = p; renderCoverHistoryTable(); }
+        function goToStaffShortagePage(p) { staffShortagePage = p; renderStaffShortageTable(); }
+        function goToAckPage(p) { ackPage = p; renderAcknowledgmentsTable(); }
+
+        function renderStatsOverviewTable() {
             const tableBody = document.getElementById('stats-table-body');
             tableBody.innerHTML = '';
 
-            taDatabase.forEach(ta => {
+            const { pageRows, totalPages, clampedPage } = paginateRows(taDatabase, statsOverviewPage, STATS_PAGE_SIZE);
+            statsOverviewPage = clampedPage;
+
+            pageRows.forEach(ta => {
                 const stats = ta.stats;
                 const absenceRate = ((stats.absences / stats.basePeriods) * 100).toFixed(1);
 
@@ -6451,6 +6515,17 @@
                 tableBody.appendChild(row);
             });
 
+            renderPaginationControls('stats-overview-pagination', statsOverviewPage, totalPages, 'goToStatsOverviewPage');
+        }
+
+        function openStatsModal() {
+            if (!requireEdit()) return;
+            statsOverviewPage = 0;
+            coverLogPage = 0;
+            staffShortagePage = 0;
+            ackPage = 0;
+
+            renderStatsOverviewTable();
             renderCoverHistoryTable();
             renderStaffShortageTable();
             renderAcknowledgmentsTable();
@@ -6487,10 +6562,14 @@
 
             if (!coverHistory.length) {
                 body.innerHTML = `<tr><td colspan="5" class="px-4 py-3 text-center text-gray-400 text-sm">No cover history yet</td></tr>`;
+                document.getElementById('coverlog-pagination').innerHTML = '';
                 return;
             }
 
-            [...coverHistory].reverse().forEach(entry => {
+            const { pageRows, totalPages, clampedPage } = paginateRows([...coverHistory].reverse(), coverLogPage, STATS_PAGE_SIZE);
+            coverLogPage = clampedPage;
+
+            pageRows.forEach(entry => {
                 const periodLabel = COVER_PERIOD_LABELS[entry.period] || entry.period;
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -6502,6 +6581,8 @@
                 `;
                 body.appendChild(row);
             });
+
+            renderPaginationControls('coverlog-pagination', coverLogPage, totalPages, 'goToCoverLogPage');
         }
 
         function renderStaffShortageTable() {
@@ -6513,10 +6594,14 @@
 
             if (!incidents.length) {
                 body.innerHTML = `<tr><td colspan="5" class="px-4 py-3 text-center text-gray-400 text-sm">No staff shortage incidents recorded</td></tr>`;
+                document.getElementById('shortage-pagination').innerHTML = '';
                 return;
             }
 
-            [...incidents].reverse().forEach(entry => {
+            const { pageRows, totalPages, clampedPage } = paginateRows([...incidents].reverse(), staffShortagePage, STATS_PAGE_SIZE);
+            staffShortagePage = clampedPage;
+
+            pageRows.forEach(entry => {
                 const periodLabel = COVER_PERIOD_LABELS[entry.period] || entry.period;
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -6528,6 +6613,8 @@
                 `;
                 body.appendChild(row);
             });
+
+            renderPaginationControls('shortage-pagination', staffShortagePage, totalPages, 'goToStaffShortagePage');
         }
 
         // Whether each side of a cover event has actually confirmed seeing
@@ -6542,6 +6629,7 @@
 
             if (!coverHistory.length) {
                 body.innerHTML = `<tr><td colspan="5" class="px-4 py-3 text-center text-gray-400 text-sm">No cover events yet</td></tr>`;
+                document.getElementById('acks-pagination').innerHTML = '';
                 return;
             }
 
@@ -6554,7 +6642,10 @@
                 return `<span class="text-amber-600">⏳ Not yet</span>`;
             }
 
-            [...coverHistory].reverse().forEach(entry => {
+            const { pageRows, totalPages, clampedPage } = paginateRows([...coverHistory].reverse(), ackPage, STATS_PAGE_SIZE);
+            ackPage = clampedPage;
+
+            pageRows.forEach(entry => {
                 const periodLabel = COVER_PERIOD_LABELS[entry.period] || entry.period;
                 const isToday = entry.date === today;
                 const row = document.createElement('tr');
@@ -6568,10 +6659,68 @@
                 `;
                 body.appendChild(row);
             });
+
+            renderPaginationControls('acks-pagination', ackPage, totalPages, 'goToAckPage');
         }
 
         function closeStatsModal() {
             document.getElementById('stats-modal').classList.add('hidden');
+        }
+
+        // ---- Stats CSV export — admin-only (same gate as opening Stats at
+        // all), one button per tab exporting that tab's FULL data (not just
+        // the current page) as a plain CSV a spreadsheet app can open. ----
+        function downloadCsv(filename, headers, rows) {
+            const escapeCsv = (val) => {
+                const s = String(val === undefined || val === null ? '' : val);
+                return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+            };
+            const lines = [headers, ...rows].map(row => row.map(escapeCsv).join(','));
+            const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function exportStatsOverviewCsv() {
+            if (!requireEdit()) return;
+            const headers = ['TA Name', 'Skills', 'Absences', 'Covered', 'Absence Rate %', 'Free Period Rate %'];
+            const rows = taDatabase.map(ta => {
+                const absenceRate = ((ta.stats.absences / ta.stats.basePeriods) * 100).toFixed(1);
+                const freeRate = computeFreePeriodRate(ta);
+                return [taDisplayName(ta), ta.skills.join('; '), ta.stats.absences, ta.stats.coversProvided, absenceRate, freeRate.rate.toFixed(0)];
+            });
+            downloadCsv('ta-stats-overview-' + getUKDateString() + '.csv', headers, rows);
+        }
+
+        function exportCoverLogCsv() {
+            if (!requireEdit()) return;
+            const headers = ['Date', 'Week', 'Day', 'Period', 'Class', 'Absent TA', 'Covered By'];
+            const rows = [...coverHistory].reverse().map(h => [h.date, h.week, h.day, COVER_PERIOD_LABELS[h.period] || h.period, h.classTitle, h.absentTaName, h.coveringTaName]);
+            downloadCsv('cover-log-' + getUKDateString() + '.csv', headers, rows);
+        }
+
+        function exportStaffShortageCsv() {
+            if (!requireEdit()) return;
+            const headers = ['Date', 'Week', 'Day', 'Period', 'Force-Assigned TA', 'Covering For', 'Class', 'Their Own Class Left Unstaffed'];
+            const rows = [...coverHistory].filter(h => h.staffShortage).reverse().map(h => [h.date, h.week, h.day, COVER_PERIOD_LABELS[h.period] || h.period, h.coveringTaName, h.absentTaName, h.classTitle, h.displacedClassTitle || 'Unknown']);
+            downloadCsv('staff-shortage-' + getUKDateString() + '.csv', headers, rows);
+        }
+
+        function exportAcknowledgmentsCsv() {
+            if (!requireEdit()) return;
+            const headers = ['Date', 'Week', 'Day', 'Period', 'Class', 'Absent TA', 'Absent Acknowledged', 'Absent Ack Time', 'Covering TA', 'Covering Acknowledged', 'Covering Ack Time'];
+            const rows = [...coverHistory].reverse().map(h => [
+                h.date, h.week, h.day, COVER_PERIOD_LABELS[h.period] || h.period, h.classTitle,
+                h.absentTaName, h.acknowledgedByAbsent ? 'Yes' : 'No', h.acknowledgedByAbsentAt || '',
+                h.coveringTaName, h.acknowledgedByCovering ? 'Yes' : 'No', h.acknowledgedByCoveringAt || ''
+            ]);
+            downloadCsv('cover-acknowledgments-' + getUKDateString() + '.csv', headers, rows);
         }
 
         // ---- Data Setup modal: Class Needs table + TA List table ----
