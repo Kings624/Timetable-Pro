@@ -1127,9 +1127,6 @@
                    class="w-full mt-1 mb-3 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
             <label class="text-xs font-medium text-gray-600">Confirm new PIN</label>
             <input id="change-pin-confirm" type="password" inputmode="numeric" maxlength="8" placeholder="Confirm new PIN"
-                   class="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-            <label class="text-xs font-medium text-gray-600 mt-3 block">New Force Assign PIN <span class="font-normal text-gray-400">(optional — leave blank to keep as-is)</span></label>
-            <input id="change-pin-force-new" type="password" inputmode="numeric" maxlength="8" placeholder="New Force Assign PIN"
                    class="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                    onkeydown="if(event.key==='Enter') submitChangePin()">
             <p id="change-pin-error" class="hidden text-xs text-red-500 mt-2">Error</p>
@@ -1268,16 +1265,6 @@
 
         <!-- Right Area: Timetable -->
         <main class="flex-1 min-h-0 overflow-y-auto main-panel bg-gray-100 p-6 flex flex-col items-center">
-
-            <!-- New-cover announcement — today's Find Cover / Force Assign
-                 events involving whichever TA is currently selected, so it's
-                 visible the moment their timetable opens rather than relying
-                 on spotting the struck-through/green block. See
-                 renderCoverAnnouncementBanner, called from
-                 loadTimetableForActiveTA and every cover state change.
-                 Hidden (and so zero-height) when there's nothing to show —
-                 fitAdaptiveTimetable accounts for its height when visible. -->
-            <div id="cover-announcement-banner" class="hidden w-full max-w-4xl mb-4 self-center space-y-1.5"></div>
 
             <!-- Week Toggle -->
             <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg mb-6 self-center">
@@ -1488,11 +1475,28 @@
                     <div id="force-cover-panel" class="hidden mt-3 bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
                         <p class="text-xs text-red-700">Only use this when no one is actually free. The TA you pick will be double-booked — if they already have a class at this time, it will be left unstaffed for the rest of today (this is logged in Stats as a staff shortage).</p>
                         <select id="force-cover-ta-select" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"></select>
-                        <input id="force-cover-pin" type="password" inputmode="numeric" maxlength="8" placeholder="Force Assign PIN" autocomplete="off" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
                         <p id="force-cover-error" class="hidden text-xs text-red-600"></p>
                         <button type="button" onclick="submitForceCover()" class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded px-3 py-1.5">Force Assign</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Cover Notice — a blocking confirmation (not a passive banner)
+         for whichever TA is currently selected, listing any of today's Find
+         Cover / Force Assign events involving them that they haven't
+         acknowledged yet. See checkCoverAcknowledgment / acknowledgeCoverNotices,
+         called whenever that TA's timetable loads. Not gated by the edit
+         lock — anyone can confirm they've seen their own notice. -->
+    <div id="cover-ack-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-60 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-amber-50">
+                <h3 class="font-bold text-amber-900 text-lg flex items-center gap-2">📢 Today's Cover Notice</h3>
+            </div>
+            <div class="p-6">
+                <div id="cover-ack-list" class="space-y-3 mb-4"></div>
+                <button onclick="acknowledgeCoverNotices()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg px-4 py-2.5">I understand, got it</button>
             </div>
         </div>
     </div>
@@ -1513,21 +1517,33 @@
                     </svg>
                 </button>
             </div>
+            <!-- Tabs — split out once Acknowledgments joined Cover Log and Staff
+                 Shortage below the main table; one continuous scroll was
+                 getting crowded. -->
+            <div class="px-6 pt-3 border-b border-gray-200 flex gap-2">
+                <button id="stats-tab-btn-overview" class="tab-btn active px-4 py-2 text-sm" onclick="switchStatsTab('overview')">Overview</button>
+                <button id="stats-tab-btn-coverlog" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('coverlog')">Cover Log</button>
+                <button id="stats-tab-btn-shortage" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('shortage')">Staff Shortage</button>
+                <button id="stats-tab-btn-acks" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('acks')">Acknowledgments</button>
+            </div>
+
             <div class="p-6 overflow-y-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TA Name</th>
-                            <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Absences</th>
-                            <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Covered</th>
-                            <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Absence Rate</th>
-                        </tr>
-                    </thead>
-                    <tbody id="stats-table-body" class="bg-white divide-y divide-gray-200">
-                        <!-- Stats data will be injected here -->
-                    </tbody>
-                </table>
-                <div class="mt-4 text-xs text-gray-500 text-right">*Absence rate calculated against a base of 25 periods per week</div>
+                <div id="stats-tab-overview">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TA Name</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Absences</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Covered</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Absence Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stats-table-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Stats data will be injected here -->
+                        </tbody>
+                    </table>
+                    <div class="mt-4 text-xs text-gray-500 text-right">*Absence rate calculated against a base of 25 periods per week</div>
+                </div>
 
                 <!-- Cover log: who covered whom, which class, and when — see
                      assignCover/revertExpiredCovers. A Find Cover assignment
@@ -1535,53 +1551,68 @@
                      (a TA's absence is a single day, and a different TA might
                      cover the same colleague next time), so this log is the
                      lasting record of past cover events. -->
-                <h4 class="text-sm font-semibold text-gray-700 mt-6 mb-2 flex items-center gap-1.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Cover Log
-                </h4>
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week/Day/Period</th>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Absent TA</th>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Covered By</th>
-                        </tr>
-                    </thead>
-                    <tbody id="cover-history-table-body" class="bg-white divide-y divide-gray-200 text-sm text-gray-700">
-                        <!-- Cover history rows injected here -->
-                    </tbody>
-                </table>
+                <div id="stats-tab-coverlog" class="hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week/Day/Period</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Absent TA</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Covered By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cover-history-table-body" class="bg-white divide-y divide-gray-200 text-sm text-gray-700">
+                            <!-- Cover history rows injected here -->
+                        </tbody>
+                    </table>
+                </div>
 
                 <!-- A Force Assign (see submitForceCover) is the one case where
                      a covering TA was already busy, not free — their own class
                      got bumped/unstaffed for the day so the entry in the Cover
-                     Log above could happen at all. Surfaced separately so an
-                     admin reviewing Stats can see exactly when the school was
+                     Log could happen at all. Surfaced separately so an admin
+                     reviewing Stats can see exactly when the school was
                      short-staffed, not just who ultimately covered what. -->
-                <h4 class="text-sm font-semibold text-red-700 mt-6 mb-2 flex items-center gap-1.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                    </svg>
-                    ⚠️ Staff Shortage Incidents
-                </h4>
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week/Day/Period</th>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Force-Assigned TA</th>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent To Cover</th>
-                            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Their Own Class Left Unstaffed</th>
-                        </tr>
-                    </thead>
-                    <tbody id="staff-shortage-table-body" class="bg-white divide-y divide-gray-200 text-sm text-gray-700">
-                        <!-- Staff shortage rows injected here -->
-                    </tbody>
-                </table>
+                <div id="stats-tab-shortage" class="hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week/Day/Period</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Force-Assigned TA</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent To Cover</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Their Own Class Left Unstaffed</th>
+                            </tr>
+                        </thead>
+                        <tbody id="staff-shortage-table-body" class="bg-white divide-y divide-gray-200 text-sm text-gray-700">
+                            <!-- Staff shortage rows injected here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Whether each side of today's (and past) cover events has
+                     actually confirmed seeing their notice — see
+                     checkCoverAcknowledgment/acknowledgeCoverNotices. Today's
+                     rows are what an admin actually needs to act on ("has
+                     Andrew even opened the app today?"); older rows are kept
+                     for the record but are no longer actionable. -->
+                <div id="stats-tab-acks" class="hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week/Day/Period</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Absent TA</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Covering TA</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ack-status-table-body" class="bg-white divide-y divide-gray-200 text-sm text-gray-700">
+                            <!-- Acknowledgment status rows injected here -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -1939,14 +1970,7 @@
         // either admin can change it without a redeploy — this default is
         // only what a brand-new/local-only install starts with.
         let sharedAdminPin = '2468';
-        // A separate PIN just for Force Assign (see submitForceCover) — kept
-        // apart from the main edit-lock PIN so day-to-day admin editing
-        // doesn't also grant the ability to double-book a TA. Lives in the
-        // shared Supabase row alongside sharedAdminPin (see
-        // buildStateSnapshot/applyLoadedState); changed via the same
-        // email-gated "Change PIN" dialog as the main PIN.
-        let forceCoverPin = '73951';
-        // The two people allowed to change either PIN (checked by email, typed
+        // The two people allowed to change the PIN (checked by email, typed
         // into the "Change the PIN" dialog). Not synced via Supabase — edit
         // this constant directly if the admins ever change.
         const SUPER_ADMIN_EMAILS = ['janice.yang@gmail.com', 'awade-gudgin@central.towerhamlets.sch.uk'];
@@ -2049,7 +2073,7 @@
             document.getElementById('change-pin-modal').classList.remove('hidden');
             document.getElementById('change-pin-error').classList.add('hidden');
             document.getElementById('change-pin-success').classList.add('hidden');
-            ['change-pin-email', 'change-pin-new', 'change-pin-confirm', 'change-pin-force-new'].forEach(id => document.getElementById(id).value = '');
+            ['change-pin-email', 'change-pin-new', 'change-pin-confirm'].forEach(id => document.getElementById(id).value = '');
             setTimeout(() => document.getElementById('change-pin-email').focus(), 50);
         }
         function closeChangePinModal() {
@@ -2059,7 +2083,6 @@
             const email = document.getElementById('change-pin-email').value.trim().toLowerCase();
             const newPin = document.getElementById('change-pin-new').value.trim();
             const confirmPin = document.getElementById('change-pin-confirm').value.trim();
-            const newForcePin = document.getElementById('change-pin-force-new').value.trim();
             const errorEl = document.getElementById('change-pin-error');
             const successEl = document.getElementById('change-pin-success');
             const isAuthorized = SUPER_ADMIN_EMAILS.some(e => e.toLowerCase() === email);
@@ -2081,20 +2104,10 @@
                 successEl.classList.add('hidden');
                 return;
             }
-            // Force Assign PIN is optional here — leaving it blank keeps
-            // whatever it already was, only the main edit-lock PIN changes.
-            if (newForcePin && newForcePin.length < 4) {
-                errorEl.textContent = 'The Force Assign PIN needs at least 4 characters (or leave it blank to keep the current one).';
-                errorEl.classList.remove('hidden');
-                successEl.classList.add('hidden');
-                return;
-            }
             errorEl.classList.add('hidden');
-            const ok = await persistSharedAdminPin(newPin, newForcePin || null);
+            const ok = await persistSharedAdminPin(newPin);
             if (ok) {
-                successEl.textContent = newForcePin
-                    ? 'PIN and Force Assign PIN changed — required for everyone from now on.'
-                    : 'PIN changed — the new PIN is required for everyone from now on.';
+                successEl.textContent = 'PIN changed — the new PIN is required for everyone from now on.';
                 successEl.classList.remove('hidden');
                 showLockToast('PIN changed');
             } else {
@@ -2102,14 +2115,13 @@
                 errorEl.classList.remove('hidden');
             }
         }
-        // Updates the PIN(s) everywhere: locally right away, and merged into a
+        // Updates the PIN everywhere: locally right away, and merged into a
         // freshly-fetched copy of the shared cloud row (not this tab's
         // possibly-stale in-memory copy) so changing the PIN can't
         // accidentally overwrite someone else's more recent timetable edits
         // with whatever this tab happened to have loaded.
-        async function persistSharedAdminPin(newPin, newForcePin) {
+        async function persistSharedAdminPin(newPin) {
             sharedAdminPin = newPin;
-            if (newForcePin) forceCoverPin = newForcePin;
             saveStateToStorage();
             if (!isCloudConfigured()) return true;
             try {
@@ -2121,7 +2133,6 @@
                 if (error) throw error;
                 const remoteData = (data && data.data) || {};
                 remoteData.sharedAdminPin = newPin;
-                if (newForcePin) remoteData.forceCoverPin = newForcePin;
                 remoteData.savedAt = new Date().toISOString();
                 const { error: upsertError } = await supabaseClient
                     .from('app_state')
@@ -2214,7 +2225,6 @@
             // doesn't have one yet — e.g. the very first load after this
             // feature shipped, before anyone has changed it.
             if (state.sharedAdminPin) sharedAdminPin = state.sharedAdminPin;
-            if (state.forceCoverPin) forceCoverPin = state.forceCoverPin;
         }
 
         function buildStateSnapshot() {
@@ -2226,7 +2236,6 @@
                 coverHistory: coverHistory,
                 currentActiveTA: currentActiveTA,
                 sharedAdminPin: sharedAdminPin,
-                forceCoverPin: forceCoverPin,
                 savedAt: new Date().toISOString()
             };
         }
@@ -4374,40 +4383,91 @@
                 });
             });
             initCoverButtons();
-            renderCoverAnnouncementBanner();
+            checkCoverAcknowledgment();
         }
 
-        // Today's Find Cover / Force Assign events involving whichever TA is
-        // currently selected — shown as a banner at the top of the timetable
-        // (see #cover-announcement-banner / fitAdaptiveTimetable) so it's seen
-        // right away instead of relying on spotting the struck-through/green
-        // block buried in the grid. Reuses coverHistory (already the single
-        // source of truth for "who covered what, when") rather than
-        // re-deriving this from raw timetable entries. Called whenever the
-        // active TA's timetable loads, and after any cover state change.
-        function renderCoverAnnouncementBanner() {
-            const container = document.getElementById('cover-announcement-banner');
-            if (!container) return;
-            const today = getUKDateString();
-            const periodLabels = { '1': 'P1', '2': 'P2', '3': 'P3', '4a': 'P4 (Lunch A)', '4b': 'P4 (Lunch B)', '5': 'P5', '6': 'P6' };
-            const relevant = coverHistory.filter(h => h.date === today &&
-                (h.absentTaId === currentActiveTA || h.coveringTaId === currentActiveTA));
+        // Shared Week/Day/Period labels for anywhere cover events get listed
+        // (this modal, Cover Log, Staff Shortage, Acknowledgments).
+        const COVER_PERIOD_LABELS = { '1': 'P1', '2': 'P2', '3': 'P3', '4a': 'P4 (Lunch A)', '4b': 'P4 (Lunch B)', '5': 'P5', '6': 'P6' };
 
-            if (!relevant.length) {
-                container.classList.add('hidden');
-                container.innerHTML = '';
+        // Today's Find Cover / Force Assign events involving whichever TA is
+        // currently selected, that TA hasn't acknowledged yet — shown as a
+        // blocking modal (not just a passive banner) so it's actually seen and
+        // confirmed, not just technically displayed somewhere on the page.
+        // Reuses coverHistory (already the single source of truth for "who
+        // covered what, when") rather than re-deriving this from raw timetable
+        // entries. Called whenever the active TA's timetable loads, and after
+        // any cover state change — safe to call anytime, since it's a no-op
+        // once everything currently relevant has been acknowledged.
+        let pendingAckEntries = [];
+        function checkCoverAcknowledgment() {
+            const modal = document.getElementById('cover-ack-modal');
+            if (!modal) return;
+            const today = getUKDateString();
+            const pending = coverHistory.filter(h => h.date === today && (
+                (h.absentTaId === currentActiveTA && !h.acknowledgedByAbsent) ||
+                (h.coveringTaId === currentActiveTA && !h.acknowledgedByCovering)
+            ));
+
+            if (!pending.length) {
+                modal.classList.add('hidden');
+                pendingAckEntries = [];
                 return;
             }
 
-            container.innerHTML = relevant.map(h => {
-                const periodLabel = periodLabels[h.period] || h.period;
+            pendingAckEntries = pending;
+            const list = document.getElementById('cover-ack-list');
+            list.innerHTML = pending.map(h => {
+                const periodLabel = COVER_PERIOD_LABELS[h.period] || h.period;
                 const when = `Week ${escapeHtml(h.week)} ${escapeHtml(h.day)}, ${escapeHtml(periodLabel)}`;
                 const message = h.coveringTaId === currentActiveTA
-                    ? `📢 You're covering <strong>${escapeHtml(h.classTitle)}</strong> for ${escapeHtml(h.absentTaName)} today (${when}).`
-                    : `📢 Your class <strong>${escapeHtml(h.classTitle)}</strong> is covered by ${escapeHtml(h.coveringTaName)} today (${when}).`;
-                return `<div class="bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-2.5 rounded-lg shadow-sm">${message}</div>`;
+                    ? `You're covering <strong>${escapeHtml(h.classTitle)}</strong> for ${escapeHtml(h.absentTaName)} today (${when}).`
+                    : `Your class <strong>${escapeHtml(h.classTitle)}</strong> is covered by ${escapeHtml(h.coveringTaName)} today (${when}).`;
+                return `<div class="bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-2.5 rounded-lg">${message}</div>`;
             }).join('');
-            container.classList.remove('hidden');
+            modal.classList.remove('hidden');
+        }
+
+        // Marks every notice currently shown in the modal as acknowledged by
+        // whichever TA is active (each entry only gets the flag for the side
+        // that actually applies to them), then syncs it to the shared cloud
+        // right away — like persistSharedAdminPin, this merges into a
+        // freshly-fetched copy of the remote row rather than this tab's
+        // possibly-stale one, so acknowledging a notice can't accidentally
+        // clobber someone else's more recent timetable edit. Not gated by
+        // requireEdit — any TA (admin or not) can confirm they've seen their
+        // own notice regardless of the shared edit-lock.
+        async function acknowledgeCoverNotices() {
+            if (!pendingAckEntries.length) return;
+            const now = new Date().toISOString();
+            pendingAckEntries.forEach(h => {
+                if (h.absentTaId === currentActiveTA) { h.acknowledgedByAbsent = true; h.acknowledgedByAbsentAt = now; }
+                if (h.coveringTaId === currentActiveTA) { h.acknowledgedByCovering = true; h.acknowledgedByCoveringAt = now; }
+            });
+            pendingAckEntries = [];
+            document.getElementById('cover-ack-modal').classList.add('hidden');
+            saveStateToStorage();
+            renderAcknowledgmentsTable(); // live-refresh Stats' Acknowledgments tab if it's open
+
+            if (!isCloudConfigured()) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('app_state')
+                    .select('data')
+                    .eq('id', SUPABASE_ROW_ID)
+                    .single();
+                if (error) throw error;
+                const remoteData = (data && data.data) || {};
+                remoteData.coverHistory = coverHistory;
+                remoteData.savedAt = new Date().toISOString();
+                const { error: upsertError } = await supabaseClient
+                    .from('app_state')
+                    .upsert({ id: SUPABASE_ROW_ID, data: remoteData, updated_at: new Date().toISOString() });
+                if (upsertError) throw upsertError;
+                lastKnownRemoteSavedAt = remoteData.savedAt;
+            } catch (e) {
+                console.error('Failed to sync cover acknowledgment to cloud:', e);
+            }
         }
 
         // Use the card's own data-origin-zone to work out which zone it came from (Class Needs'
@@ -4842,13 +4902,19 @@
             return found;
         }
 
-        // Every week ('A'/'B') this class code has been recorded under anywhere —
-        // across every student's schedule and every Class Need — used to warn if
-        // a manual entry's code is only ever known to happen in the OTHER week.
-        function getKnownWeeksForCode(code) {
+        // Every exact Week/Day/Period this class code is actually scheduled for,
+        // across every student's timetable and every Class Need — used to hard-
+        // block a manual entry from being typed into a slot other than one of
+        // these (see handleManualCodeEntered). A real class's slot is fixed for
+        // the whole term, so typing its code into the sidebar/a cell is just
+        // another way of placing it, and shouldn't be able to sidestep the same
+        // rule the drag-and-drop hard block already enforces. A code with no
+        // known slot at all (pure ad-hoc/Duty entries) has nothing to check
+        // against and stays unrestricted.
+        function getKnownSlotsForCode(code) {
             const target = (code || '').trim().toLowerCase();
-            const weeks = new Set();
-            if (!target) return weeks;
+            const slots = new Set();
+            if (!target) return slots;
 
             studentTimetables.forEach(student => {
                 ['A', 'B'].forEach(week => {
@@ -4858,7 +4924,7 @@
                         PERIOD_OPTIONS.forEach(period => {
                             const cellData = dayEntries[period];
                             if (cellData && cellData.code && cellData.code.trim().toLowerCase() === target) {
-                                weeks.add(week);
+                                slots.add(week + '|' + day + '|' + period);
                             }
                         });
                     });
@@ -4866,12 +4932,12 @@
             });
 
             classNeedsData.forEach(item => {
-                if (item.title && item.week && item.title.trim().toLowerCase() === target) {
-                    weeks.add(item.week);
+                if (item.title && item.week && item.day && item.period && item.title.trim().toLowerCase() === target) {
+                    slots.add(item.week + '|' + item.day + '|' + item.period);
                 }
             });
 
-            return weeks;
+            return slots;
         }
 
         function startManualEntry(cell) {
@@ -5045,20 +5111,21 @@
             const code = codeInput.value.trim();
             if (!code) return;
 
-            // Foolproofing: if this code is only ever recorded under the OTHER
-            // week, warn before adding it here — same intent as the drag-and-drop
-            // week check above, just softer (a confirm, not a hard block) since a
-            // manual entry's "known week" is only inferred from other people's
-            // typing, not sourced from an authoritative record the way a dragged
-            // card's own week field is.
-            const cellWeek = cell.dataset.week;
-            const knownWeeks = getKnownWeeksForCode(code);
-            if (cellWeek && knownWeeks.size && !knownWeeks.has(cellWeek)) {
-                const otherWeeks = Array.from(knownWeeks).join(' & ');
-                const proceed = confirm(
-                    `"${code}" is only recorded under Week ${otherWeeks}, not Week ${cellWeek}.\n\nAdd it here anyway?`
-                );
-                if (!proceed) return;
+            // Same rule as the drag-and-drop hard block — a real class's slot is
+            // fixed for the whole term, so typing its code in is just another way
+            // of placing it and can't be allowed to land somewhere the actual
+            // scheduled class never runs. A code with no known slot at all (an
+            // ad-hoc/Duty entry) has nothing to check against and goes through
+            // freely, same as before.
+            const cellWeek = cell.dataset.week, cellDay = cell.dataset.day, cellPeriod = cell.dataset.period;
+            const knownSlots = getKnownSlotsForCode(code);
+            if (knownSlots.size && !knownSlots.has(cellWeek + '|' + cellDay + '|' + cellPeriod)) {
+                const slotList = Array.from(knownSlots).map(s => {
+                    const [w, d, p] = s.split('|');
+                    return `Week ${w} ${d} Period ${p}`;
+                }).join(', ');
+                alert(`"${code}" is scheduled for ${slotList} — it can't be placed in Week ${cellWeek} ${cellDay} Period ${cellPeriod}.`);
+                return;
             }
 
             const matches = lookupClassCode(code);
@@ -5191,18 +5258,16 @@
             const weekToggle = mainPanel.querySelector(':scope > .flex.space-x-1');
             const legend = document.getElementById('timetable-legend-row');
             const signoff = document.getElementById('janice-signoff');
-            const banner = document.getElementById('cover-announcement-banner');
 
             const panelHeight = mainPanel.clientHeight; // set by syncPanelHeights
             const paddingV = 48; // p-6 top+bottom
-            const bannerH = (banner && !banner.classList.contains('hidden')) ? banner.offsetHeight + 16 : 0; // + mb-4
             const weekToggleH = weekToggle ? weekToggle.offsetHeight + 24 : 0; // + mb-6
             const headerH = headerRow.offsetHeight;
             const legendH = legend ? legend.offsetHeight + 16 : 0; // + mt-4
             const signoffH = (signoff && !signoff.classList.contains('hidden')) ? signoff.offsetHeight + 12 : 0;
             const containerBorders = 2;
 
-            const bodyAvailable = Math.max(140, panelHeight - paddingV - bannerH - weekToggleH - headerH - legendH - signoffH - containerBorders);
+            const bodyAvailable = Math.max(140, panelHeight - paddingV - weekToggleH - headerH - legendH - signoffH - containerBorders);
             bodyA.style.height = bodyAvailable + 'px';
             bodyB.style.height = bodyAvailable + 'px';
 
@@ -5872,12 +5937,12 @@
             forceSection.classList.toggle('hidden', coverModalMode !== 'cover');
             document.getElementById('force-cover-panel').classList.add('hidden');
             document.getElementById('force-cover-error').classList.add('hidden');
-            document.getElementById('force-cover-pin').value = '';
 
             document.getElementById('cover-modal').classList.remove('hidden');
         }
 
         function toggleForceCoverPanel() {
+            if (!requireEdit()) return;
             const panel = document.getElementById('force-cover-panel');
             panel.classList.toggle('hidden');
             if (!panel.classList.contains('hidden')) {
@@ -5889,7 +5954,6 @@
                     .map(ta => `<option value="${ta.id}">${escapeHtml(taDisplayName(ta))}</option>`)
                     .join('');
                 document.getElementById('force-cover-error').classList.add('hidden');
-                document.getElementById('force-cover-pin').value = '';
             }
         }
 
@@ -5907,22 +5971,15 @@
 
         // Admin override for the rare case where every TA is genuinely busy at
         // this slot — Janice judges who can be pulled off their own class to
-        // cover instead. Gated by its own separate PIN (forceCoverPin, changed
-        // alongside the main shared PIN — see submitChangePin), not the
-        // SUPER_ADMIN_EMAILS email check, so using it day-to-day doesn't need
-        // an email round-trip. assignCover itself already snapshots whatever
-        // the chosen TA currently has at this slot and restores it the next
-        // day (see assignCover/revertExpiredCovers), so the only thing this
-        // adds is the explicit warning and the PIN gate.
+        // cover instead. Gated the same way as any other edit (requireEdit —
+        // whoever has already unlocked with the shared PIN can use it, no
+        // separate PIN or email round-trip). assignCover itself already
+        // snapshots whatever the chosen TA currently has at this slot and
+        // restores it the next day (see assignCover/revertExpiredCovers), so
+        // the only thing this adds is the explicit warning before proceeding.
         function submitForceCover() {
+            if (!requireEdit()) return;
             const errorEl = document.getElementById('force-cover-error');
-            const pin = document.getElementById('force-cover-pin').value.trim();
-            if (pin !== forceCoverPin) {
-                errorEl.textContent = "Incorrect PIN — nothing was changed.";
-                errorEl.classList.remove('hidden');
-                return;
-            }
-
             const taId = document.getElementById('force-cover-ta-select').value;
             const coveringTa = taDatabase.find(t => t.id === taId);
             if (!coveringTa || !currentCoverBlock) return;
@@ -6133,8 +6190,7 @@
                 // Cover" instead of sitting with no button at all until the
                 // next unrelated re-render (e.g. switching TA and back).
                 initCoverButtons();
-                renderCoverAnnouncementBanner();
-                fitAdaptiveTimetable();
+                checkCoverAcknowledgment();
             }
             closeCoverModal();
         }
@@ -6201,7 +6257,7 @@
             if (anyChanged) {
                 saveStateToStorage(); // keep the local cache consistent with what's now shown
                 initCoverButtons(); // rebind listeners on any freshly-restored blocks — innerHTML never carries them
-                renderCoverAnnouncementBanner();
+                checkCoverAcknowledgment();
             }
             return anyChanged;
         }
@@ -6281,8 +6337,7 @@
 
             saveStateToStorage();
             initCoverButtons();
-            renderCoverAnnouncementBanner();
-            fitAdaptiveTimetable();
+            checkCoverAcknowledgment();
         }
 
         function openStatsModal() {
@@ -6319,8 +6374,31 @@
 
             renderCoverHistoryTable();
             renderStaffShortageTable();
+            renderAcknowledgmentsTable();
+            switchStatsTab('overview');
 
             document.getElementById('stats-modal').classList.remove('hidden');
+        }
+
+        function switchStatsTab(tab) {
+            const panels = {
+                overview: document.getElementById('stats-tab-overview'),
+                coverlog: document.getElementById('stats-tab-coverlog'),
+                shortage: document.getElementById('stats-tab-shortage'),
+                acks: document.getElementById('stats-tab-acks')
+            };
+            const btns = {
+                overview: document.getElementById('stats-tab-btn-overview'),
+                coverlog: document.getElementById('stats-tab-btn-coverlog'),
+                shortage: document.getElementById('stats-tab-btn-shortage'),
+                acks: document.getElementById('stats-tab-btn-acks')
+            };
+            Object.keys(panels).forEach(key => {
+                const isActive = key === tab;
+                panels[key].classList.toggle('hidden', !isActive);
+                btns[key].classList.toggle('active', isActive);
+                btns[key].classList.toggle('text-gray-600', !isActive);
+            });
         }
 
         function renderCoverHistoryTable() {
@@ -6328,15 +6406,13 @@
             if (!body) return;
             body.innerHTML = '';
 
-            const periodLabels = { '1': 'P1', '2': 'P2', '3': 'P3', '4a': 'P4 (Lunch A)', '4b': 'P4 (Lunch B)', '5': 'P5', '6': 'P6' };
-
             if (!coverHistory.length) {
                 body.innerHTML = `<tr><td colspan="5" class="px-4 py-3 text-center text-gray-400 text-sm">No cover history yet</td></tr>`;
                 return;
             }
 
             [...coverHistory].reverse().forEach(entry => {
-                const periodLabel = periodLabels[entry.period] || entry.period;
+                const periodLabel = COVER_PERIOD_LABELS[entry.period] || entry.period;
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="px-4 py-2 whitespace-nowrap">${escapeHtml(entry.date)}</td>
@@ -6354,7 +6430,6 @@
             if (!body) return;
             body.innerHTML = '';
 
-            const periodLabels = { '1': 'P1', '2': 'P2', '3': 'P3', '4a': 'P4 (Lunch A)', '4b': 'P4 (Lunch B)', '5': 'P5', '6': 'P6' };
             const incidents = coverHistory.filter(h => h.staffShortage);
 
             if (!incidents.length) {
@@ -6363,7 +6438,7 @@
             }
 
             [...incidents].reverse().forEach(entry => {
-                const periodLabel = periodLabels[entry.period] || entry.period;
+                const periodLabel = COVER_PERIOD_LABELS[entry.period] || entry.period;
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="px-4 py-2 whitespace-nowrap">${escapeHtml(entry.date)}</td>
@@ -6371,6 +6446,46 @@
                     <td class="px-4 py-2">${escapeHtml(entry.coveringTaName || '')}</td>
                     <td class="px-4 py-2">${escapeHtml(entry.classTitle || '')} (for ${escapeHtml(entry.absentTaName || '')})</td>
                     <td class="px-4 py-2 text-red-600">${escapeHtml(entry.displacedClassTitle || 'Unknown')}</td>
+                `;
+                body.appendChild(row);
+            });
+        }
+
+        // Whether each side of a cover event has actually confirmed seeing
+        // their notice (see checkCoverAcknowledgment/acknowledgeCoverNotices),
+        // and when. Today's rows are what's actually actionable ("has Andrew
+        // even opened the app today?"); older rows are a permanent record but
+        // nothing to chase anymore, so they're visually muted.
+        function renderAcknowledgmentsTable() {
+            const body = document.getElementById('ack-status-table-body');
+            if (!body) return;
+            body.innerHTML = '';
+
+            if (!coverHistory.length) {
+                body.innerHTML = `<tr><td colspan="5" class="px-4 py-3 text-center text-gray-400 text-sm">No cover events yet</td></tr>`;
+                return;
+            }
+
+            const today = getUKDateString();
+            function ackBadge(acked, at) {
+                if (acked) {
+                    const time = at ? new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+                    return `<span class="text-emerald-600">✅ Acknowledged${time ? ' at ' + time : ''}</span>`;
+                }
+                return `<span class="text-amber-600">⏳ Not yet</span>`;
+            }
+
+            [...coverHistory].reverse().forEach(entry => {
+                const periodLabel = COVER_PERIOD_LABELS[entry.period] || entry.period;
+                const isToday = entry.date === today;
+                const row = document.createElement('tr');
+                row.className = isToday ? '' : 'opacity-50';
+                row.innerHTML = `
+                    <td class="px-4 py-2 whitespace-nowrap">${escapeHtml(entry.date)}${isToday ? ' <span class="text-indigo-600 font-semibold">(today)</span>' : ''}</td>
+                    <td class="px-4 py-2 whitespace-nowrap">Week ${escapeHtml(entry.week)} ${escapeHtml(entry.day)}, ${escapeHtml(periodLabel)}</td>
+                    <td class="px-4 py-2">${escapeHtml(entry.classTitle || '')}</td>
+                    <td class="px-4 py-2">${escapeHtml(entry.absentTaName || '')}<br>${ackBadge(entry.acknowledgedByAbsent, entry.acknowledgedByAbsentAt)}</td>
+                    <td class="px-4 py-2">${escapeHtml(entry.coveringTaName || '')}<br>${ackBadge(entry.acknowledgedByCovering, entry.acknowledgedByCoveringAt)}</td>
                 `;
                 body.appendChild(row);
             });
