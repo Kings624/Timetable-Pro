@@ -1550,6 +1550,7 @@
                                 <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Absences</th>
                                 <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Covered</th>
                                 <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Absence Rate</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="Share of this TA's non-lunch periods (both weeks) with no class assigned">Free Period Rate</th>
                             </tr>
                         </thead>
                         <tbody id="stats-table-body" class="bg-white divide-y divide-gray-200">
@@ -5630,6 +5631,7 @@
         // alphabetical order the TA dropdown uses — for printing/handing out the
         // whole staff's schedules in one go instead of one-by-one.
         function exportAllTimetablesToPDF() {
+            if (!requireEdit()) return;
             if (!taDatabase.length) return;
             saveCurrentTimetableState(); // capture the currently-open TA's on-screen edits first
 
@@ -6156,8 +6158,15 @@
                     // only ever budgeted for 2, spilling into the row below at the
                     // enlarged font size. This way the covered block stays exactly
                     // the same height as a normal one.
+                    // Both sides truncate with their own ellipsis, and the badge
+                    // is capped at 45% of the row — without that cap, a long
+                    // covering-TA name (shrink-0, no max-width) could squeeze the
+                    // original title down to 0 width AND still overflow the cell
+                    // itself with a hard, ellipsis-less cutoff (found via testing
+                    // with a ~35-character name). flex-1 gives the original title
+                    // priority for whatever space the badge doesn't need.
                     titleEl.classList.add('flex', 'items-center', 'gap-1', 'min-w-0');
-                    titleEl.innerHTML = `<del class="text-gray-400 truncate min-w-0" title="${escapeHtml(originalText)}">${escapeHtml(originalText)}</del><span class="text-[10px] text-green-700 bg-green-50 px-1 py-0.5 rounded shrink-0 font-semibold" title="Covered by ${escapeHtml(taName)}">→ ${escapeHtml(taName)}</span>`;
+                    titleEl.innerHTML = `<del class="text-gray-400 truncate min-w-0 flex-1" title="${escapeHtml(originalText)}">${escapeHtml(originalText)}</del><span class="text-[10px] text-green-700 bg-green-50 px-1 py-0.5 rounded truncate max-w-[45%] font-semibold" title="Covered by ${escapeHtml(taName)}">→ ${escapeHtml(taName)}</span>`;
                 }
 
                 currentCoverBlock.draggable = false;
@@ -6317,6 +6326,17 @@
             delete entry.coveredDate;
             delete entry.coverPairTaId;
 
+            // assignCover incremented these as a permanent record of a real
+            // absence/cover — but this one never ran its course (that's the
+            // whole point of Cancel Cover, vs. letting it expire naturally at
+            // day's end), so it shouldn't leave a phantom mark on either TA's
+            // Stats Overview row.
+            if (absentTa) absentTa.stats.absences = Math.max(0, absentTa.stats.absences - 1);
+            if (coveringTaId) {
+                const coveringTaForStats = taDatabase.find(t => t.id === coveringTaId);
+                if (coveringTaForStats) coveringTaForStats.stats.coversProvided = Math.max(0, coveringTaForStats.stats.coversProvided - 1);
+            }
+
             if (coveringTaId) {
                 const coveringTa = taDatabase.find(t => t.id === coveringTaId);
                 const coveringWeekData = coveringTa && coveringTa.timetables[week];
@@ -6367,17 +6387,41 @@
             checkCoverAcknowledgment();
         }
 
+        // Share of a TA's non-lunch periods (both weeks, same 25-per-week base
+        // the Absence Rate column already uses) with no class assigned — a
+        // quick visual read on how much slack/capacity each TA actually has,
+        // for spotting who's realistically available before reaching for
+        // Force Assign. Lunch slots (4a/4b) are excluded since one of the
+        // pair is expected to stay empty for lunch regardless of workload.
+        function computeFreePeriodRate(ta) {
+            const teachingPeriods = ['1', '2', '3', '5', '6'];
+            let total = 0, filled = 0;
+            ['A', 'B'].forEach(week => {
+                DAY_OPTIONS.forEach(day => {
+                    teachingPeriods.forEach(period => {
+                        total++;
+                        if (ta.timetables[week] && ta.timetables[week][day] && ta.timetables[week][day][period]) filled++;
+                    });
+                });
+            });
+            const free = total - filled;
+            return { total, filled, free, rate: total ? (free / total * 100) : 0 };
+        }
+
         function openStatsModal() {
+            if (!requireEdit()) return;
             const tableBody = document.getElementById('stats-table-body');
             tableBody.innerHTML = '';
 
             taDatabase.forEach(ta => {
                 const stats = ta.stats;
                 const absenceRate = ((stats.absences / stats.basePeriods) * 100).toFixed(1);
-                
+
                 let rateColor = 'text-gray-900';
                 if (absenceRate > 10) rateColor = 'text-red-600 font-bold';
                 else if (absenceRate > 5) rateColor = 'text-orange-500 font-medium';
+
+                const freeRate = computeFreePeriodRate(ta);
 
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -6395,6 +6439,14 @@
                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">${stats.absences}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-green-600">+${stats.coversProvided}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm ${rateColor}">${absenceRate}%</td>
+                    <td class="px-6 py-4 whitespace-nowrap" title="${freeRate.free} of ${freeRate.total} non-lunch periods free across both weeks">
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 min-w-[70px] max-w-[110px] h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-indigo-400 rounded-full" style="width: ${freeRate.rate.toFixed(0)}%"></div>
+                            </div>
+                            <span class="text-xs text-gray-600 font-medium shrink-0">${freeRate.rate.toFixed(0)}%</span>
+                        </div>
+                    </td>
                 `;
                 tableBody.appendChild(row);
             });
@@ -7391,6 +7443,7 @@
         }
 
         function openCompareModal() {
+            if (!requireEdit()) return;
             if (compareOrder.length === 0) {
                 // Sensible default so the view isn't empty the first time it opens.
                 if (currentActiveTA) compareOrder.push('ta:' + currentActiveTA);
