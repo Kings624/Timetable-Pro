@@ -1127,6 +1127,9 @@
                    class="w-full mt-1 mb-3 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
             <label class="text-xs font-medium text-gray-600">Confirm new PIN</label>
             <input id="change-pin-confirm" type="password" inputmode="numeric" maxlength="8" placeholder="Confirm new PIN"
+                   class="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <label class="text-xs font-medium text-gray-600 mt-3 block">New Force Assign PIN <span class="font-normal text-gray-400">(optional — leave blank to keep as-is)</span></label>
+            <input id="change-pin-force-new" type="password" inputmode="numeric" maxlength="8" placeholder="New Force Assign PIN"
                    class="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                    onkeydown="if(event.key==='Enter') submitChangePin()">
             <p id="change-pin-error" class="hidden text-xs text-red-500 mt-2">Error</p>
@@ -1141,12 +1144,15 @@
     <!-- What's New — shown once per shared PIN unlock ("admin login") after
          a new update ships, then not again until the next one. See
          CHANGELOG_VERSION / showChangelogIfNew, called from submitPinModal. -->
-    <div id="changelog-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-[70]">
-        <div class="bg-white rounded-xl shadow-xl p-6 w-96">
-            <h2 class="text-base font-bold text-gray-900 mb-1 flex items-center gap-1.5">✨ What's New</h2>
-            <p class="text-xs text-gray-500 mb-3">Since your last visit:</p>
-            <ul id="changelog-list" class="list-disc list-inside text-sm text-gray-700 space-y-1.5 mb-4"></ul>
-            <button onclick="closeChangelogModal()" class="w-full px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">Got it</button>
+    <div id="changelog-modal" class="hidden fixed inset-0 bg-slate-950 bg-opacity-70 flex items-center justify-center z-[70]">
+        <div class="relative bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-400/40 rounded-xl shadow-[0_0_40px_-8px_rgba(34,211,238,0.45)] p-6 w-96 font-mono">
+            <span class="absolute -top-4 -left-3 text-2xl drop-shadow-[0_0_8px_rgba(250,204,21,0.7)]" title="Admin update">👑</span>
+            <h2 class="text-sm font-bold text-cyan-300 mb-1 flex items-center gap-1.5 tracking-widest">
+                <span class="text-cyan-400">&gt;_</span> WHAT'S NEW
+            </h2>
+            <p class="text-[11px] text-slate-500 mb-3 tracking-wide">// since your last visit</p>
+            <ul id="changelog-list" class="text-[13px] text-slate-200 space-y-2 mb-5 leading-snug"></ul>
+            <button onclick="closeChangelogModal()" class="w-full px-3 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-900 text-sm font-bold tracking-widest transition-colors">GOT IT</button>
         </div>
     </div>
 
@@ -1262,7 +1268,17 @@
 
         <!-- Right Area: Timetable -->
         <main class="flex-1 min-h-0 overflow-y-auto main-panel bg-gray-100 p-6 flex flex-col items-center">
-            
+
+            <!-- New-cover announcement — today's Find Cover / Force Assign
+                 events involving whichever TA is currently selected, so it's
+                 visible the moment their timetable opens rather than relying
+                 on spotting the struck-through/green block. See
+                 renderCoverAnnouncementBanner, called from
+                 loadTimetableForActiveTA and every cover state change.
+                 Hidden (and so zero-height) when there's nothing to show —
+                 fitAdaptiveTimetable accounts for its height when visible. -->
+            <div id="cover-announcement-banner" class="hidden w-full max-w-4xl mb-4 self-center space-y-1.5"></div>
+
             <!-- Week Toggle -->
             <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg mb-6 self-center">
                 <button id="btn-week-a" class="tab-btn active bg-white shadow px-6 py-1.5 rounded-md text-sm font-medium transition-all" onclick="toggleWeek('A')">Ⓐ Week A</button>
@@ -1472,7 +1488,7 @@
                     <div id="force-cover-panel" class="hidden mt-3 bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
                         <p class="text-xs text-red-700">Only use this when no one is actually free. The TA you pick will be double-booked — if they already have a class at this time, it will be left unstaffed for the rest of today (this is logged in Stats as a staff shortage).</p>
                         <select id="force-cover-ta-select" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"></select>
-                        <input id="force-cover-email" type="email" placeholder="Admin email to confirm" autocomplete="off" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                        <input id="force-cover-pin" type="password" inputmode="numeric" maxlength="8" placeholder="Force Assign PIN" autocomplete="off" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
                         <p id="force-cover-error" class="hidden text-xs text-red-600"></p>
                         <button type="button" onclick="submitForceCover()" class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded px-3 py-1.5">Force Assign</button>
                     </div>
@@ -1923,7 +1939,14 @@
         // either admin can change it without a redeploy — this default is
         // only what a brand-new/local-only install starts with.
         let sharedAdminPin = '2468';
-        // The two people allowed to change the PIN (checked by email, typed
+        // A separate PIN just for Force Assign (see submitForceCover) — kept
+        // apart from the main edit-lock PIN so day-to-day admin editing
+        // doesn't also grant the ability to double-book a TA. Lives in the
+        // shared Supabase row alongside sharedAdminPin (see
+        // buildStateSnapshot/applyLoadedState); changed via the same
+        // email-gated "Change PIN" dialog as the main PIN.
+        let forceCoverPin = '73951';
+        // The two people allowed to change either PIN (checked by email, typed
         // into the "Change the PIN" dialog). Not synced via Supabase — edit
         // this constant directly if the admins ever change.
         const SUPER_ADMIN_EMAILS = ['janice.yang@gmail.com', 'awade-gudgin@central.towerhamlets.sch.uk'];
@@ -1938,10 +1961,14 @@
         // unlock ("admin login" — the closest thing this app has to one).
         // Stored per-device in localStorage (not synced), so it's shown once
         // per browser the first time it unlocks after a new version ships.
-        const CHANGELOG_VERSION = '2026-09-16-2';
+        // Only list things a user actually benefits from — for a purely
+        // visual/cosmetic pass with nothing functionally new, just write
+        // "Cosmetic polish" rather than describing the visual details.
+        const CHANGELOG_VERSION = '2026-09-16-3';
         const CHANGELOG_ITEMS = [
-            'Force Assign: when every TA is genuinely busy, an admin can now manually force one to cover anyway — their own class is preserved and comes back automatically the next day.',
-            'Staff shortage incidents (from Force Assign) are now logged in Stats.',
+            'Force Assign: when every TA is genuinely busy, an admin can now manually force one to cover anyway (its own separate PIN) — their own class is preserved and comes back automatically the next day.',
+            'Staff shortages from Force Assign are now logged in Stats.',
+            'A banner now announces today\'s cover assignments right on your timetable — no more hunting for the struck-through or green block.',
             'Fixed the "+ Add class" form getting cut off instead of showing fully.'
         ];
         function showChangelogIfNew() {
@@ -1951,7 +1978,9 @@
             const modal = document.getElementById('changelog-modal');
             const list = document.getElementById('changelog-list');
             if (!modal || !list) return;
-            list.innerHTML = CHANGELOG_ITEMS.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+            list.innerHTML = CHANGELOG_ITEMS.map(item =>
+                `<li class="flex gap-2"><span class="text-cyan-400 shrink-0">▸</span><span>${escapeHtml(item)}</span></li>`
+            ).join('');
             modal.classList.remove('hidden');
             try { localStorage.setItem('ta_timetable_last_seen_changelog', CHANGELOG_VERSION); } catch (e) {}
         }
@@ -2020,7 +2049,7 @@
             document.getElementById('change-pin-modal').classList.remove('hidden');
             document.getElementById('change-pin-error').classList.add('hidden');
             document.getElementById('change-pin-success').classList.add('hidden');
-            ['change-pin-email', 'change-pin-new', 'change-pin-confirm'].forEach(id => document.getElementById(id).value = '');
+            ['change-pin-email', 'change-pin-new', 'change-pin-confirm', 'change-pin-force-new'].forEach(id => document.getElementById(id).value = '');
             setTimeout(() => document.getElementById('change-pin-email').focus(), 50);
         }
         function closeChangePinModal() {
@@ -2030,11 +2059,12 @@
             const email = document.getElementById('change-pin-email').value.trim().toLowerCase();
             const newPin = document.getElementById('change-pin-new').value.trim();
             const confirmPin = document.getElementById('change-pin-confirm').value.trim();
+            const newForcePin = document.getElementById('change-pin-force-new').value.trim();
             const errorEl = document.getElementById('change-pin-error');
             const successEl = document.getElementById('change-pin-success');
             const isAuthorized = SUPER_ADMIN_EMAILS.some(e => e.toLowerCase() === email);
             if (!isAuthorized) {
-                errorEl.textContent = "This email isn't on the admin list — the PIN wasn't changed.";
+                errorEl.textContent = "This email isn't on the admin list — nothing was changed.";
                 errorEl.classList.remove('hidden');
                 successEl.classList.add('hidden');
                 return;
@@ -2051,10 +2081,20 @@
                 successEl.classList.add('hidden');
                 return;
             }
+            // Force Assign PIN is optional here — leaving it blank keeps
+            // whatever it already was, only the main edit-lock PIN changes.
+            if (newForcePin && newForcePin.length < 4) {
+                errorEl.textContent = 'The Force Assign PIN needs at least 4 characters (or leave it blank to keep the current one).';
+                errorEl.classList.remove('hidden');
+                successEl.classList.add('hidden');
+                return;
+            }
             errorEl.classList.add('hidden');
-            const ok = await persistSharedAdminPin(newPin);
+            const ok = await persistSharedAdminPin(newPin, newForcePin || null);
             if (ok) {
-                successEl.textContent = 'PIN changed — the new PIN is required for everyone from now on.';
+                successEl.textContent = newForcePin
+                    ? 'PIN and Force Assign PIN changed — required for everyone from now on.'
+                    : 'PIN changed — the new PIN is required for everyone from now on.';
                 successEl.classList.remove('hidden');
                 showLockToast('PIN changed');
             } else {
@@ -2062,13 +2102,14 @@
                 errorEl.classList.remove('hidden');
             }
         }
-        // Updates the PIN everywhere: locally right away, and merged into a
+        // Updates the PIN(s) everywhere: locally right away, and merged into a
         // freshly-fetched copy of the shared cloud row (not this tab's
         // possibly-stale in-memory copy) so changing the PIN can't
         // accidentally overwrite someone else's more recent timetable edits
         // with whatever this tab happened to have loaded.
-        async function persistSharedAdminPin(newPin) {
+        async function persistSharedAdminPin(newPin, newForcePin) {
             sharedAdminPin = newPin;
+            if (newForcePin) forceCoverPin = newForcePin;
             saveStateToStorage();
             if (!isCloudConfigured()) return true;
             try {
@@ -2080,6 +2121,7 @@
                 if (error) throw error;
                 const remoteData = (data && data.data) || {};
                 remoteData.sharedAdminPin = newPin;
+                if (newForcePin) remoteData.forceCoverPin = newForcePin;
                 remoteData.savedAt = new Date().toISOString();
                 const { error: upsertError } = await supabaseClient
                     .from('app_state')
@@ -2172,6 +2214,7 @@
             // doesn't have one yet — e.g. the very first load after this
             // feature shipped, before anyone has changed it.
             if (state.sharedAdminPin) sharedAdminPin = state.sharedAdminPin;
+            if (state.forceCoverPin) forceCoverPin = state.forceCoverPin;
         }
 
         function buildStateSnapshot() {
@@ -2183,6 +2226,7 @@
                 coverHistory: coverHistory,
                 currentActiveTA: currentActiveTA,
                 sharedAdminPin: sharedAdminPin,
+                forceCoverPin: forceCoverPin,
                 savedAt: new Date().toISOString()
             };
         }
@@ -4330,6 +4374,40 @@
                 });
             });
             initCoverButtons();
+            renderCoverAnnouncementBanner();
+        }
+
+        // Today's Find Cover / Force Assign events involving whichever TA is
+        // currently selected — shown as a banner at the top of the timetable
+        // (see #cover-announcement-banner / fitAdaptiveTimetable) so it's seen
+        // right away instead of relying on spotting the struck-through/green
+        // block buried in the grid. Reuses coverHistory (already the single
+        // source of truth for "who covered what, when") rather than
+        // re-deriving this from raw timetable entries. Called whenever the
+        // active TA's timetable loads, and after any cover state change.
+        function renderCoverAnnouncementBanner() {
+            const container = document.getElementById('cover-announcement-banner');
+            if (!container) return;
+            const today = getUKDateString();
+            const periodLabels = { '1': 'P1', '2': 'P2', '3': 'P3', '4a': 'P4 (Lunch A)', '4b': 'P4 (Lunch B)', '5': 'P5', '6': 'P6' };
+            const relevant = coverHistory.filter(h => h.date === today &&
+                (h.absentTaId === currentActiveTA || h.coveringTaId === currentActiveTA));
+
+            if (!relevant.length) {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = relevant.map(h => {
+                const periodLabel = periodLabels[h.period] || h.period;
+                const when = `Week ${escapeHtml(h.week)} ${escapeHtml(h.day)}, ${escapeHtml(periodLabel)}`;
+                const message = h.coveringTaId === currentActiveTA
+                    ? `📢 You're covering <strong>${escapeHtml(h.classTitle)}</strong> for ${escapeHtml(h.absentTaName)} today (${when}).`
+                    : `📢 Your class <strong>${escapeHtml(h.classTitle)}</strong> is covered by ${escapeHtml(h.coveringTaName)} today (${when}).`;
+                return `<div class="bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-2.5 rounded-lg shadow-sm">${message}</div>`;
+            }).join('');
+            container.classList.remove('hidden');
         }
 
         // Use the card's own data-origin-zone to work out which zone it came from (Class Needs'
@@ -5113,16 +5191,18 @@
             const weekToggle = mainPanel.querySelector(':scope > .flex.space-x-1');
             const legend = document.getElementById('timetable-legend-row');
             const signoff = document.getElementById('janice-signoff');
+            const banner = document.getElementById('cover-announcement-banner');
 
             const panelHeight = mainPanel.clientHeight; // set by syncPanelHeights
             const paddingV = 48; // p-6 top+bottom
+            const bannerH = (banner && !banner.classList.contains('hidden')) ? banner.offsetHeight + 16 : 0; // + mb-4
             const weekToggleH = weekToggle ? weekToggle.offsetHeight + 24 : 0; // + mb-6
             const headerH = headerRow.offsetHeight;
             const legendH = legend ? legend.offsetHeight + 16 : 0; // + mt-4
             const signoffH = (signoff && !signoff.classList.contains('hidden')) ? signoff.offsetHeight + 12 : 0;
             const containerBorders = 2;
 
-            const bodyAvailable = Math.max(140, panelHeight - paddingV - weekToggleH - headerH - legendH - signoffH - containerBorders);
+            const bodyAvailable = Math.max(140, panelHeight - paddingV - bannerH - weekToggleH - headerH - legendH - signoffH - containerBorders);
             bodyA.style.height = bodyAvailable + 'px';
             bodyB.style.height = bodyAvailable + 'px';
 
@@ -5790,7 +5870,7 @@
             forceSection.classList.toggle('hidden', coverModalMode !== 'cover');
             document.getElementById('force-cover-panel').classList.add('hidden');
             document.getElementById('force-cover-error').classList.add('hidden');
-            document.getElementById('force-cover-email').value = '';
+            document.getElementById('force-cover-pin').value = '';
 
             document.getElementById('cover-modal').classList.remove('hidden');
         }
@@ -5807,7 +5887,7 @@
                     .map(ta => `<option value="${ta.id}">${escapeHtml(taDisplayName(ta))}</option>`)
                     .join('');
                 document.getElementById('force-cover-error').classList.add('hidden');
-                document.getElementById('force-cover-email').value = '';
+                document.getElementById('force-cover-pin').value = '';
             }
         }
 
@@ -5825,17 +5905,18 @@
 
         // Admin override for the rare case where every TA is genuinely busy at
         // this slot — Janice judges who can be pulled off their own class to
-        // cover instead. Same SUPER_ADMIN_EMAILS check as changing the shared
-        // PIN (a soft deterrent, not real authentication, consistent with the
-        // rest of this app's access model). assignCover itself already snapshots
-        // whatever the chosen TA currently has at this slot and restores it the
-        // next day (see assignCover/revertExpiredCovers), so the only thing this
-        // adds is the explicit warning and the SUPER_ADMIN_EMAILS gate.
+        // cover instead. Gated by its own separate PIN (forceCoverPin, changed
+        // alongside the main shared PIN — see submitChangePin), not the
+        // SUPER_ADMIN_EMAILS email check, so using it day-to-day doesn't need
+        // an email round-trip. assignCover itself already snapshots whatever
+        // the chosen TA currently has at this slot and restores it the next
+        // day (see assignCover/revertExpiredCovers), so the only thing this
+        // adds is the explicit warning and the PIN gate.
         function submitForceCover() {
             const errorEl = document.getElementById('force-cover-error');
-            const email = document.getElementById('force-cover-email').value.trim().toLowerCase();
-            if (!SUPER_ADMIN_EMAILS.some(e => e.toLowerCase() === email)) {
-                errorEl.textContent = "This email isn't on the admin list — nothing was changed.";
+            const pin = document.getElementById('force-cover-pin').value.trim();
+            if (pin !== forceCoverPin) {
+                errorEl.textContent = "Incorrect PIN — nothing was changed.";
                 errorEl.classList.remove('hidden');
                 return;
             }
@@ -6050,6 +6131,8 @@
                 // Cover" instead of sitting with no button at all until the
                 // next unrelated re-render (e.g. switching TA and back).
                 initCoverButtons();
+                renderCoverAnnouncementBanner();
+                fitAdaptiveTimetable();
             }
             closeCoverModal();
         }
@@ -6116,6 +6199,7 @@
             if (anyChanged) {
                 saveStateToStorage(); // keep the local cache consistent with what's now shown
                 initCoverButtons(); // rebind listeners on any freshly-restored blocks — innerHTML never carries them
+                renderCoverAnnouncementBanner();
             }
             return anyChanged;
         }
@@ -6195,6 +6279,8 @@
 
             saveStateToStorage();
             initCoverButtons();
+            renderCoverAnnouncementBanner();
+            fitAdaptiveTimetable();
         }
 
         function openStatsModal() {
