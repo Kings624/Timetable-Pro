@@ -1109,6 +1109,13 @@
         </div>
     </nav>
 
+    <!-- Full-width, so it never competes with the navbar's own already-tight
+         inline space for room (an earlier version lived inside the navbar
+         and got silently clipped by that row's overflow-hidden at most
+         realistic window widths — confirmed via measurement, not assumed).
+         See updateUpcomingAbsenceBadge / plannedAbsences. -->
+    <div id="upcoming-absence-banner" onclick="openPlannedAbsencesFromBadge()" class="hidden bg-amber-50 border-b border-amber-200 text-amber-800 text-xs px-4 py-1.5 text-center cursor-pointer hover:bg-amber-100 transition-colors"></div>
+
     <!-- PIN entry modal -->
     <div id="pin-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-[70]">
         <div class="bg-white rounded-xl shadow-xl p-6 w-80">
@@ -1795,6 +1802,7 @@
                 <button id="data-tab-btn-needs" class="tab-btn active px-4 py-2 text-sm" onclick="switchDataTab('needs')">Class Needs</button>
                 <button id="data-tab-btn-tas" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('tas')">TA List</button>
                 <button id="data-tab-btn-students" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('students')">Students</button>
+                <button id="data-tab-btn-absences" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('absences')">Planned Absences</button>
                 <button id="data-tab-btn-backups" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('backups')">Backups</button>
             </div>
 
@@ -1894,6 +1902,29 @@
                         </div>
                     </div>
 
+                </div>
+
+                <!-- Planned Absences — Phase 1: a plain reminder list, not
+                     automatic cover. See the note on `plannedAbsences` above
+                     for why this doesn't try to map a future date onto Week
+                     A/B — Find Cover still only ever acts on "today". -->
+                <div id="data-tab-absences" class="hidden">
+                    <p class="text-xs text-gray-500 mb-3">Register a known-in-advance absence here so it doesn't get forgotten — this is just a reminder list, not automatic cover. When the day arrives, use Find Cover on the timetable as usual. Past dates drop off this list on their own.</p>
+                    <div class="flex justify-between items-center mb-3">
+                        <span></span>
+                        <button onclick="addPlannedAbsenceRow()" class="bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-md text-xs font-medium">+ Add Row</button>
+                    </div>
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+                            <tr>
+                                <th class="px-2 py-2 text-left">TA</th>
+                                <th class="px-2 py-2 text-left">Date</th>
+                                <th class="px-2 py-2 text-left">Reason</th>
+                                <th class="px-2 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="planned-absences-tbody"></tbody>
+                    </table>
                 </div>
 
                 <!-- Backups — one entry captured automatically per calendar day
@@ -2568,6 +2599,10 @@
                 coverHistory.length = 0;
                 state.coverHistory.forEach(c => coverHistory.push(c));
             }
+            if (Array.isArray(state.plannedAbsences)) {
+                plannedAbsences.length = 0;
+                state.plannedAbsences.forEach(p => plannedAbsences.push(p));
+            }
             // Not touched by undo/redo (those snapshots don't carry history —
             // see buildCoreStateSnapshot) — only a real load (cloud pull, file
             // import, page load) restores it.
@@ -2604,6 +2639,7 @@
                 classNeedsData: classNeedsData,
                 taListData: taListData,
                 coverHistory: coverHistory,
+                plannedAbsences: plannedAbsences,
                 currentActiveTA: currentActiveTA,
                 sharedAdminPin: sharedAdminPin,
                 savedAt: new Date().toISOString()
@@ -2843,6 +2879,8 @@
             document.getElementById('unassigned-standard').innerHTML = '';
             loadTimetableForActiveTA();
             initCoverButtons();
+            cleanUpPastPlannedAbsences();
+            updateUpcomingAbsenceBadge();
         }
 
         // Rebuild the navbar TA <select> from whatever is actually in taDatabase
@@ -3025,6 +3063,15 @@
         // Class Needs starts empty — the old demo rows were just for illustration.
         // Real per-student periods now come from studentTimetables below instead.
         let classNeedsData = [];
+
+        // A known-in-advance absence an admin has registered ahead of time —
+        // deliberately just a reminder list (Phase 1), not automatic cover.
+        // Find Cover still only ever acts on "today" (see revertExpiredCovers);
+        // this doesn't try to map a future date onto Week A/B automatically
+        // (this app has no calendar linking real dates to that rotation yet),
+        // it just surfaces "don't forget" until the date arrives, then drops
+        // off the list on its own (see cleanUpPastPlannedAbsences).
+        let plannedAbsences = [];
 
         // Permanent log of past Find Cover assignments (see assignCover),
         // independent of the live timetable — a cover entry itself only
@@ -5984,6 +6031,8 @@
                 refreshTaSelectorOptions();
             }
             revertExpiredCovers(); // clean up any Find Cover assignment left over from a previous day, before the first render
+            cleanUpPastPlannedAbsences();
+            updateUpcomingAbsenceBadge();
 
             initCoverButtons();
             rebuildStudentSelector();
@@ -7425,6 +7474,8 @@
             document.getElementById('student-list-view').classList.remove('hidden');
             editingStudentId = null;
             renderStudentListTable();
+            cleanUpPastPlannedAbsences();
+            renderPlannedAbsencesTab();
             renderBackupsTab();
             document.getElementById('data-modal').classList.remove('hidden');
         }
@@ -7453,12 +7504,14 @@
                 needs: document.getElementById('data-tab-needs'),
                 tas: document.getElementById('data-tab-tas'),
                 students: document.getElementById('data-tab-students'),
+                absences: document.getElementById('data-tab-absences'),
                 backups: document.getElementById('data-tab-backups')
             };
             const btns = {
                 needs: document.getElementById('data-tab-btn-needs'),
                 tas: document.getElementById('data-tab-btn-tas'),
                 students: document.getElementById('data-tab-btn-students'),
+                absences: document.getElementById('data-tab-btn-absences'),
                 backups: document.getElementById('data-tab-btn-backups')
             };
             Object.keys(panels).forEach(key => {
@@ -7558,6 +7611,86 @@
         function removeTaRow(idx) {
             taListData.splice(idx, 1);
             renderTaListTable();
+        }
+
+        // -- Planned Absences (Phase 1 — see the note on `plannedAbsences` above) --
+
+        // Drops anything dated before today off the list — a stale "don't
+        // forget" entry for a day that's already passed has nothing left to
+        // remind anyone of. Called whenever the tab is about to be shown.
+        function cleanUpPastPlannedAbsences() {
+            const today = getUKDateString();
+            const before = plannedAbsences.length;
+            plannedAbsences = plannedAbsences.filter(p => p.date >= today);
+            if (plannedAbsences.length !== before) updateUpcomingAbsenceBadge();
+        }
+
+        function renderPlannedAbsencesTab() {
+            const tbody = document.getElementById('planned-absences-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            if (!plannedAbsences.length) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-2 py-4 text-center text-gray-400 text-sm">No upcoming absences registered</td></tr>`;
+                return;
+            }
+            const sorted = [...plannedAbsences].sort((a, b) => a.date.localeCompare(b.date));
+            const taOptions = [...taDatabase].sort((a, b) => a.name.localeCompare(b.name));
+            sorted.forEach(entry => {
+                const idx = plannedAbsences.indexOf(entry);
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100';
+                tr.innerHTML = `
+                    <td class="px-2 py-1">
+                        <select onchange="updatePlannedAbsenceField(${idx}, 'taId', this.value)" class="border border-gray-200 rounded px-2 py-1 text-sm">
+                            ${taOptions.map(ta => `<option value="${ta.id}" ${ta.id === entry.taId ? 'selected' : ''}>${escapeHtml(taDisplayName(ta))}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="px-2 py-1"><input type="date" value="${escapeHtml(entry.date)}" onchange="updatePlannedAbsenceField(${idx}, 'date', this.value)" class="border border-gray-200 rounded px-2 py-1 text-sm"></td>
+                    <td class="px-2 py-1"><input type="text" value="${escapeHtml(entry.reason || '')}" placeholder="e.g. training day" oninput="updatePlannedAbsenceField(${idx}, 'reason', this.value)" class="w-full border border-gray-200 rounded px-2 py-1 text-sm"></td>
+                    <td class="px-2 py-1"><button onclick="removePlannedAbsenceRow(${idx})" title="Delete" class="text-gray-400 hover:text-red-500 text-sm px-1">✕</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updatePlannedAbsenceField(idx, field, value) {
+            plannedAbsences[idx][field] = value;
+            if (field === 'date') { renderPlannedAbsencesTab(); updateUpcomingAbsenceBadge(); } // resort + rebadge on a date edit
+        }
+
+        function addPlannedAbsenceRow() {
+            const defaultTa = taDatabase[0] ? taDatabase[0].id : '';
+            plannedAbsences.push({ id: 'absence-' + Date.now(), taId: defaultTa, date: getUKDateString(), reason: '' });
+            renderPlannedAbsencesTab();
+        }
+
+        function removePlannedAbsenceRow(idx) {
+            plannedAbsences.splice(idx, 1);
+            renderPlannedAbsencesTab();
+            updateUpcomingAbsenceBadge();
+        }
+
+        // Small navbar hint so a registered absence doesn't just sit
+        // forgotten inside Data Setup — counts anything within the next 7
+        // days (today included), clicking it jumps straight to the tab.
+        const UPCOMING_ABSENCE_WINDOW_DAYS = 7;
+        function updateUpcomingAbsenceBadge() {
+            const banner = document.getElementById('upcoming-absence-banner');
+            if (!banner) return;
+            const today = getUKDateString();
+            const windowEnd = getUKDateString(new Date(Date.now() + UPCOMING_ABSENCE_WINDOW_DAYS * 24 * 60 * 60 * 1000));
+            const count = plannedAbsences.filter(p => p.date >= today && p.date <= windowEnd).length;
+            if (count > 0) {
+                banner.textContent = `⚠️ ${count} upcoming absence${count === 1 ? '' : 's'} in the next ${UPCOMING_ABSENCE_WINDOW_DAYS} days — click to review`;
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
+        function openPlannedAbsencesFromBadge() {
+            openDataModal();
+            switchDataTab('absences');
         }
 
         // -- Apply: turn the two input tables into the live unassigned pool + TA database --
