@@ -1720,6 +1720,7 @@
                 <button id="data-tab-btn-needs" class="tab-btn active px-4 py-2 text-sm" onclick="switchDataTab('needs')">Class Needs</button>
                 <button id="data-tab-btn-tas" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('tas')">TA List</button>
                 <button id="data-tab-btn-students" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('students')">Students</button>
+                <button id="data-tab-btn-backups" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('backups')">Backups</button>
             </div>
 
             <div class="p-6 overflow-y-auto flex-1">
@@ -1818,6 +1819,15 @@
                         </div>
                     </div>
 
+                </div>
+
+                <!-- Backups — one entry captured automatically per calendar day
+                     (see recordDailyHistorySnapshotIfNeeded), restorable here as
+                     a safety net beyond manual Export/Import and the
+                     per-tab-session Undo/Redo (which resets on reload). -->
+                <div id="data-tab-backups" class="hidden">
+                    <p class="text-xs text-gray-500 mb-3">A snapshot of everything is captured automatically the first time anyone saves on a new day, kept for the last <span id="backups-max-entries"></span> days. Restoring replaces the current data — what's live right now gets its own snapshot first, so this can be undone the same way.</p>
+                    <div id="backups-list"></div>
                 </div>
 
             </div>
@@ -2479,6 +2489,13 @@
                 coverHistory.length = 0;
                 state.coverHistory.forEach(c => coverHistory.push(c));
             }
+            // Not touched by undo/redo (those snapshots don't carry history —
+            // see buildCoreStateSnapshot) — only a real load (cloud pull, file
+            // import, page load) restores it.
+            if (Array.isArray(state.stateHistory)) {
+                stateHistory.length = 0;
+                state.stateHistory.forEach(h => stateHistory.push(h));
+            }
             if (state.currentActiveTA) currentActiveTA = state.currentActiveTA;
             // Falls back to whatever's already in memory (the '2468' default,
             // or a PIN this tab already knows about) if the shared row
@@ -2487,7 +2504,12 @@
             if (state.sharedAdminPin) sharedAdminPin = state.sharedAdminPin;
         }
 
-        function buildStateSnapshot() {
+        // Everything EXCEPT stateHistory — used both as the base for the real
+        // saved snapshot (below) and for undo/redo (deepCloneState), which
+        // must never carry stateHistory: each undo entry would otherwise drag
+        // along a copy of every backup, multiplying memory by
+        // MAX_STATE_HISTORY_ENTRIES for every single undo step.
+        function buildCoreStateSnapshot() {
             return {
                 taDatabase: taDatabase,
                 studentTimetables: studentTimetables,
@@ -2498,6 +2520,31 @@
                 sharedAdminPin: sharedAdminPin,
                 savedAt: new Date().toISOString()
             };
+        }
+
+        function buildStateSnapshot() {
+            return { ...buildCoreStateSnapshot(), stateHistory: stateHistory };
+        }
+
+        // Called right before a save overwrites the previous saved state
+        // (local or cloud) — if today (UK date) doesn't already have an
+        // entry, archives `previousData` (the state about to be replaced) so
+        // the FIRST save of a new day locks in yesterday's end state, not a
+        // same-day intermediate one. Returns the history array to save with
+        // THIS write; the caller commits it to the in-memory `stateHistory`
+        // only once its own write actually succeeds.
+        function recordDailyHistorySnapshotIfNeeded(previousData) {
+            const existingHistory = Array.isArray(previousData && previousData.stateHistory) ? previousData.stateHistory : stateHistory;
+            if (!previousData || !Array.isArray(previousData.taDatabase) || !previousData.taDatabase.length) {
+                return existingHistory; // nothing meaningful to archive yet (fresh install, or couldn't be read)
+            }
+            const today = getUKDateString();
+            if (existingHistory.some(h => h.date === today)) {
+                return existingHistory; // already snapshotted once today
+            }
+            const { stateHistory: _omit, ...previousCore } = previousData; // never nest a history-within-a-history
+            const entry = { date: today, archivedAt: new Date().toISOString(), snapshot: previousCore };
+            return [...existingHistory, entry].slice(-MAX_STATE_HISTORY_ENTRIES);
         }
 
         // ---- Undo / Redo ----
@@ -2511,7 +2558,7 @@
         let isRestoringState = false; // guards against snapshotting during undo/redo itself
 
         function deepCloneState() {
-            return JSON.parse(JSON.stringify(buildStateSnapshot()));
+            return JSON.parse(JSON.stringify(buildCoreStateSnapshot()));
         }
 
         // Call this once, right before a user action starts mutating state.
@@ -2566,7 +2613,15 @@
 
         function saveStateToStorage() {
             try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(buildStateSnapshot()));
+                let previous = null;
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (raw) previous = JSON.parse(raw);
+                } catch (e) { /* couldn't read the previous save — proceed without archiving it */ }
+                const updatedHistory = recordDailyHistorySnapshotIfNeeded(previous);
+                const snapshot = { ...buildCoreStateSnapshot(), stateHistory: updatedHistory };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+                stateHistory = updatedHistory; // only commit in-memory once the write actually succeeded
                 return true;
             } catch (e) {
                 console.error('Save to localStorage failed:', e);
@@ -2608,11 +2663,18 @@
         async function saveStateToCloud() {
             if (!isCloudConfigured()) return false;
             try {
-                const snapshot = buildStateSnapshot();
+                let previousRemote = null;
+                try {
+                    const { data } = await supabaseClient.from('app_state').select('data').eq('id', SUPABASE_ROW_ID).single();
+                    previousRemote = data && data.data;
+                } catch (e) { /* couldn't read the previous remote state — not fatal, just skip archiving it this save */ }
+                const updatedHistory = recordDailyHistorySnapshotIfNeeded(previousRemote);
+                const snapshot = { ...buildCoreStateSnapshot(), stateHistory: updatedHistory };
                 const { error } = await supabaseClient
                     .from('app_state')
                     .upsert({ id: SUPABASE_ROW_ID, data: snapshot, updated_at: new Date().toISOString() });
                 if (error) throw error;
+                stateHistory = updatedHistory; // only commit in-memory once the write actually succeeded
                 lastKnownRemoteSavedAt = snapshot.savedAt;
                 setConnectionStatus('connected');
                 const hint = document.getElementById('cloud-status-hint');
@@ -2880,6 +2942,19 @@
         // record persists so Stats can show who covered whom, which class,
         // and when.
         let coverHistory = [];
+
+        // Daily rolling backup — see recordDailyHistorySnapshotIfNeeded, called
+        // right before every save (local or cloud). At most one entry per UK
+        // calendar day: the first save of a new day archives whatever was live
+        // at that moment (i.e. "yesterday's end state"), so an admin can always
+        // restore to how things looked at the start of any of the last several
+        // days. Capped at MAX_STATE_HISTORY_ENTRIES — each entry is a full
+        // snapshot, so this is deliberately small to stay well within
+        // localStorage's quota in local-only mode (Supabase's jsonb column has
+        // much more headroom, but one shared cap keeps the logic identical for
+        // both paths rather than maintaining two).
+        let stateHistory = [];
+        const MAX_STATE_HISTORY_ENTRIES = 10;
 
         let taListData = [
             { id: 'andrew', name: 'Andrew', tags: 'Science, Maths' },
@@ -6960,6 +7035,51 @@
             downloadCsv('cover-log-' + getUKDateString() + '.csv', headers, rows);
         }
 
+        // ---- Backups tab (Data Setup) — see recordDailyHistorySnapshotIfNeeded ----
+
+        function renderBackupsTab() {
+            const countEl = document.getElementById('backups-max-entries');
+            if (countEl) countEl.textContent = MAX_STATE_HISTORY_ENTRIES;
+            const container = document.getElementById('backups-list');
+            if (!container) return;
+            if (!stateHistory.length) {
+                container.innerHTML = `<p class="text-sm text-gray-400 text-center py-8">No backups yet — one is captured automatically the first time anyone saves on a new day.</p>`;
+                return;
+            }
+            const rows = [...stateHistory].reverse().map(entry => {
+                const idx = stateHistory.indexOf(entry);
+                const s = entry.snapshot || {};
+                const taCount = Array.isArray(s.taDatabase) ? s.taDatabase.length : 0;
+                const studentCount = Array.isArray(s.studentTimetables) ? s.studentTimetables.length : 0;
+                const time = entry.archivedAt ? new Date(entry.archivedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+                return `
+                    <div class="flex items-center justify-between border border-gray-200 rounded-lg px-4 py-3">
+                        <div>
+                            <div class="font-medium text-gray-800 text-sm">${escapeHtml(entry.date)}</div>
+                            <div class="text-xs text-gray-500">Captured at ${escapeHtml(time)} — ${taCount} TA${taCount === 1 ? '' : 's'}, ${studentCount} student${studentCount === 1 ? '' : 's'}</div>
+                        </div>
+                        <button onclick="restoreFromHistorySnapshot(${idx})" class="px-3 py-1.5 rounded-md text-xs font-medium text-amber-700 border border-amber-200 hover:bg-amber-50 shrink-0 ml-4">Restore this version</button>
+                    </div>
+                `;
+            }).join('');
+            container.innerHTML = `<div class="space-y-2">${rows}</div>`;
+        }
+
+        // Replaces everything with an archived day's snapshot. Not gated on the
+        // Data Setup "Apply Changes" flow — takes effect immediately (like
+        // Import Data), since it's meant as an emergency undo, not a draft edit.
+        function restoreFromHistorySnapshot(idx) {
+            if (!requireEdit()) return;
+            const entry = stateHistory[idx];
+            if (!entry) return;
+            if (!confirm(`Restore everything to how it looked on ${entry.date}? What's live right now will itself be archived first, so this can be undone the same way.`)) return;
+            applyLoadedState(entry.snapshot);
+            refreshWholeUI();
+            saveStateToStorage();
+            closeDataModal();
+            alert('Restored to ' + entry.date + '.' + (isCloudConfigured() ? ' Press "Save Changes" to push this restored version to the shared cloud data too.' : ''));
+        }
+
         function exportStaffShortageCsv() {
             if (!requireEdit()) return;
             const headers = ['Date', 'Week', 'Day', 'Period', 'Force-Assigned TA', 'Covering For', 'Class', 'Their Own Class Left Unstaffed'];
@@ -6996,6 +7116,7 @@
             document.getElementById('student-list-view').classList.remove('hidden');
             editingStudentId = null;
             renderStudentListTable();
+            renderBackupsTab();
             document.getElementById('data-modal').classList.remove('hidden');
         }
 
@@ -7022,12 +7143,14 @@
             const panels = {
                 needs: document.getElementById('data-tab-needs'),
                 tas: document.getElementById('data-tab-tas'),
-                students: document.getElementById('data-tab-students')
+                students: document.getElementById('data-tab-students'),
+                backups: document.getElementById('data-tab-backups')
             };
             const btns = {
                 needs: document.getElementById('data-tab-btn-needs'),
                 tas: document.getElementById('data-tab-btn-tas'),
-                students: document.getElementById('data-tab-btn-students')
+                students: document.getElementById('data-tab-btn-students'),
+                backups: document.getElementById('data-tab-btn-backups')
             };
             Object.keys(panels).forEach(key => {
                 const isActive = key === tab;
