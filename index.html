@@ -1575,6 +1575,7 @@
                 <button id="stats-tab-btn-coverlog" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('coverlog')">Cover Log</button>
                 <button id="stats-tab-btn-shortage" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('shortage')">Staff Shortage</button>
                 <button id="stats-tab-btn-acks" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('acks')">Acknowledgments</button>
+                <button id="stats-tab-btn-activity" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('activity')">Activity Log</button>
             </div>
 
             <div class="p-6 overflow-y-auto flex-1 min-h-0">
@@ -1693,6 +1694,37 @@
                         </tbody>
                     </table>
                     <div id="acks-pagination"></div>
+                </div>
+
+                <!-- Activity Log — see logActivity/activityLog. Deliberately narrow:
+                     only a handful of significant action types get logged (PIN
+                     changes, Data Setup being applied or a file imported, a
+                     manual class entry, Reset All Schedules), not every drag
+                     move. "Who" is a best-guess (whichever TA was selected at
+                     the time) except a PIN change, where it's the email
+                     actually typed in — this app has no real login. -->
+                <div id="stats-tab-activity" class="hidden">
+                    <p class="text-xs text-gray-500 mb-3">A permanent record of significant changes — PIN changes, Data Setup being applied or a file imported, manual class entries, and Reset All Schedules. "Who" reflects whichever TA was selected at the time, which is a best guess, not a verified identity (this app has no real login) — except a PIN change, where it's the email that was actually typed in.</p>
+                    <div class="flex justify-end mb-2">
+                        <button onclick="exportActivityLogCsv()" class="flex items-center gap-1.5 text-xs text-gray-600 hover:text-indigo-700 border border-gray-200 hover:border-indigo-200 rounded-md px-2.5 py-1.5 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Export CSV
+                        </button>
+                    </div>
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">When</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who (best guess)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-log-table-body" class="bg-white divide-y divide-gray-200 text-sm text-gray-700">
+                            <!-- Activity log rows injected here -->
+                        </tbody>
+                    </table>
+                    <div id="activity-pagination"></div>
                 </div>
             </div>
         </div>
@@ -2377,6 +2409,10 @@
             errorEl.classList.add('hidden');
             const ok = await persistSharedAdminPin(newPin);
             if (ok) {
+                // Unlike everywhere else in this log, this actor is a verified
+                // fact, not a soft-trust guess: changing the PIN requires
+                // actually typing one of the two SUPER_ADMIN_EMAILS above.
+                logActivity('Changed admin PIN', '', email);
                 successEl.textContent = 'PIN changed — the new PIN is required for everyone from now on.';
                 successEl.classList.remove('hidden');
                 showLockToast('PIN changed');
@@ -2496,6 +2532,15 @@
                 stateHistory.length = 0;
                 state.stateHistory.forEach(h => stateHistory.push(h));
             }
+            // Same rule as stateHistory just above: a restore (undo, or
+            // rolling back to an old backup) must never erase the audit
+            // trail's own more recent entries — including the restore action
+            // itself — so this is only ever populated by a real top-level
+            // load, never by anything nested inside a backup snapshot.
+            if (Array.isArray(state.activityLog)) {
+                activityLog.length = 0;
+                state.activityLog.forEach(a => activityLog.push(a));
+            }
             if (state.currentActiveTA) currentActiveTA = state.currentActiveTA;
             // Falls back to whatever's already in memory (the '2468' default,
             // or a PIN this tab already knows about) if the shared row
@@ -2523,7 +2568,7 @@
         }
 
         function buildStateSnapshot() {
-            return { ...buildCoreStateSnapshot(), stateHistory: stateHistory };
+            return { ...buildCoreStateSnapshot(), stateHistory: stateHistory, activityLog: activityLog };
         }
 
         // Called right before a save overwrites the previous saved state
@@ -2542,7 +2587,7 @@
             if (existingHistory.some(h => h.date === today)) {
                 return existingHistory; // already snapshotted once today
             }
-            const { stateHistory: _omit, ...previousCore } = previousData; // never nest a history-within-a-history
+            const { stateHistory: _omit, activityLog: _omit2, ...previousCore } = previousData; // never nest a history-within-a-history
             const entry = { date: today, archivedAt: new Date().toISOString(), snapshot: previousCore };
             return [...existingHistory, entry].slice(-MAX_STATE_HISTORY_ENTRIES);
         }
@@ -2619,7 +2664,7 @@
                     if (raw) previous = JSON.parse(raw);
                 } catch (e) { /* couldn't read the previous save — proceed without archiving it */ }
                 const updatedHistory = recordDailyHistorySnapshotIfNeeded(previous);
-                const snapshot = { ...buildCoreStateSnapshot(), stateHistory: updatedHistory };
+                const snapshot = { ...buildCoreStateSnapshot(), stateHistory: updatedHistory, activityLog: activityLog };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
                 stateHistory = updatedHistory; // only commit in-memory once the write actually succeeded
                 return true;
@@ -2669,7 +2714,7 @@
                     previousRemote = data && data.data;
                 } catch (e) { /* couldn't read the previous remote state — not fatal, just skip archiving it this save */ }
                 const updatedHistory = recordDailyHistorySnapshotIfNeeded(previousRemote);
-                const snapshot = { ...buildCoreStateSnapshot(), stateHistory: updatedHistory };
+                const snapshot = { ...buildCoreStateSnapshot(), stateHistory: updatedHistory, activityLog: activityLog };
                 const { error } = await supabaseClient
                     .from('app_state')
                     .upsert({ id: SUPABASE_ROW_ID, data: snapshot, updated_at: new Date().toISOString() });
@@ -2892,6 +2937,7 @@
             if (!confirmed) return;
 
             pushUndoSnapshot();
+            logActivity('Reset ALL schedules', `${taDatabase.length} TAs cleared`);
             taDatabase.forEach(ta => {
                 ta.timetables = { A: {}, B: {} };
                 ta.stats = { absences: 0, coversProvided: 0, basePeriods: 25 };
@@ -2918,6 +2964,7 @@
                     const json = rows.slice(1).map(r => r[0] || '').join('');
                     const state = JSON.parse(json);
                     applyLoadedState(state);
+                    logActivity('Imported data from Excel file', file.name);
                     refreshWholeUI();
                     saveStateToStorage();
                     alert('Data imported successfully.' + (isCloudConfigured() ? ' Press "Save Changes" to push it to the shared cloud data too.' : ''));
@@ -2955,6 +3002,30 @@
         // both paths rather than maintaining two).
         let stateHistory = [];
         const MAX_STATE_HISTORY_ENTRIES = 10;
+
+        // A narrow, permanent audit trail — deliberately NOT every drag-and-drop
+        // move (Undo/Redo already covers that, per-tab, without needing a
+        // permanent record); only genuinely significant actions call
+        // logActivity(): PIN changes, Data Setup being applied or a file being
+        // imported, a manual class entry, and Reset All Schedules. "Who" is
+        // just whichever TA is currently selected at the time — this app has
+        // no real login, so it's the same soft-trust guess as everywhere else
+        // in this file, NOT a verified identity — except a PIN change, where
+        // the email actually typed in is real evidence (see submitChangePin).
+        let activityLog = [];
+        const MAX_ACTIVITY_LOG_ENTRIES = 200;
+
+        function logActivity(action, details, actorOverride) {
+            const ta = taDatabase.find(t => t.id === currentActiveTA);
+            activityLog.push({
+                timestamp: new Date().toISOString(),
+                date: getUKDateString(),
+                action: action,
+                details: details || '',
+                actorHint: actorOverride || (ta ? taDisplayName(ta) : currentActiveTA)
+            });
+            if (activityLog.length > MAX_ACTIVITY_LOG_ENTRIES) activityLog.shift();
+        }
 
         let taListData = [
             { id: 'andrew', name: 'Andrew', tags: 'Science, Maths' },
@@ -5527,6 +5598,7 @@
 
         function createManualClassBlock(cell, code, teacher, room, isDuty) {
             pushUndoSnapshot();
+            logActivity('Added manual ' + (isDuty ? 'duty' : 'class') + ' entry', `"${code}" — Week ${cell.dataset.week} ${cell.dataset.day} Period ${cell.dataset.period}`);
             const block = document.createElement('div');
             block.dataset.classData = JSON.stringify({ title: code, teacher: teacher, room: room, duration: 1, skills: [], isDuty: !!isDuty });
             if (isDuty) {
@@ -6771,7 +6843,7 @@
         // different row counts). Reset to page 0 every time the modal opens,
         // since the underlying data may have changed since it was last open. ----
         const STATS_PAGE_SIZE = 10;
-        let statsOverviewPage = 0, coverLogPage = 0, staffShortagePage = 0, ackPage = 0;
+        let statsOverviewPage = 0, coverLogPage = 0, staffShortagePage = 0, ackPage = 0, activityLogPage = 0;
 
         function paginateRows(rows, page, pageSize) {
             const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -6799,6 +6871,7 @@
         function goToCoverLogPage(p) { coverLogPage = p; renderCoverHistoryTable(); }
         function goToStaffShortagePage(p) { staffShortagePage = p; renderStaffShortageTable(); }
         function goToAckPage(p) { ackPage = p; renderAcknowledgmentsTable(); }
+        function goToActivityLogPage(p) { activityLogPage = p; renderActivityLogTable(); }
 
         function renderStatsOverviewTable() {
             const tableBody = document.getElementById('stats-table-body');
@@ -6854,11 +6927,13 @@
             coverLogPage = 0;
             staffShortagePage = 0;
             ackPage = 0;
+            activityLogPage = 0;
 
             renderStatsOverviewTable();
             renderCoverHistoryTable();
             renderStaffShortageTable();
             renderAcknowledgmentsTable();
+            renderActivityLogTable();
             switchStatsTab('overview');
 
             document.getElementById('stats-modal').classList.remove('hidden');
@@ -6869,13 +6944,15 @@
                 overview: document.getElementById('stats-tab-overview'),
                 coverlog: document.getElementById('stats-tab-coverlog'),
                 shortage: document.getElementById('stats-tab-shortage'),
-                acks: document.getElementById('stats-tab-acks')
+                acks: document.getElementById('stats-tab-acks'),
+                activity: document.getElementById('stats-tab-activity')
             };
             const btns = {
                 overview: document.getElementById('stats-tab-btn-overview'),
                 coverlog: document.getElementById('stats-tab-btn-coverlog'),
                 shortage: document.getElementById('stats-tab-btn-shortage'),
-                acks: document.getElementById('stats-tab-btn-acks')
+                acks: document.getElementById('stats-tab-btn-acks'),
+                activity: document.getElementById('stats-tab-btn-activity')
             };
             Object.keys(panels).forEach(key => {
                 const isActive = key === tab;
@@ -6993,6 +7070,35 @@
             renderPaginationControls('acks-pagination', ackPage, totalPages, 'goToAckPage');
         }
 
+        function renderActivityLogTable() {
+            const body = document.getElementById('activity-log-table-body');
+            if (!body) return;
+            body.innerHTML = '';
+
+            if (!activityLog.length) {
+                body.innerHTML = `<tr><td colspan="4" class="px-4 py-3 text-center text-gray-400 text-sm">No significant actions recorded yet</td></tr>`;
+                document.getElementById('activity-pagination').innerHTML = '';
+                return;
+            }
+
+            const { pageRows, totalPages, clampedPage } = paginateRows([...activityLog].reverse(), activityLogPage, STATS_PAGE_SIZE);
+            activityLogPage = clampedPage;
+
+            pageRows.forEach(entry => {
+                const when = entry.timestamp ? new Date(entry.timestamp).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : entry.date;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-4 py-2 whitespace-nowrap">${escapeHtml(when)}</td>
+                    <td class="px-4 py-2 whitespace-nowrap font-medium text-gray-800">${escapeHtml(entry.action)}</td>
+                    <td class="px-4 py-2">${escapeHtml(entry.details || '')}</td>
+                    <td class="px-4 py-2 whitespace-nowrap">${escapeHtml(entry.actorHint || '')}</td>
+                `;
+                body.appendChild(row);
+            });
+
+            renderPaginationControls('activity-pagination', activityLogPage, totalPages, 'goToActivityLogPage');
+        }
+
         function closeStatsModal() {
             document.getElementById('stats-modal').classList.add('hidden');
         }
@@ -7096,6 +7202,13 @@
                 h.coveringTaName, h.acknowledgedByCovering ? 'Yes' : 'No', h.acknowledgedByCoveringAt || ''
             ]);
             downloadCsv('cover-acknowledgments-' + getUKDateString() + '.csv', headers, rows);
+        }
+
+        function exportActivityLogCsv() {
+            if (!requireEdit()) return;
+            const headers = ['Timestamp', 'Action', 'Details', 'Who (best guess)'];
+            const rows = [...activityLog].reverse().map(a => [a.timestamp, a.action, a.details || '', a.actorHint || '']);
+            downloadCsv('activity-log-' + getUKDateString() + '.csv', headers, rows);
         }
 
         // ---- Data Setup modal: Class Needs table + TA List table ----
@@ -7379,6 +7492,18 @@
         }
 
         async function applyDataChanges() {
+            // Only logs when rows were actually added/removed (not every field
+            // tweak) — that's the signal worth a permanent record; the
+            // Undo/Redo stack already covers finer-grained edits within a
+            // single session.
+            if (dataModalOpenSnapshot) {
+                const before = dataModalOpenSnapshot;
+                const parts = [];
+                if (classNeedsData.length !== before.classNeedsData.length) parts.push(`Class Needs ${before.classNeedsData.length}→${classNeedsData.length}`);
+                if (taListData.length !== before.taListData.length) parts.push(`TAs ${before.taListData.length}→${taListData.length}`);
+                if (studentTimetables.length !== before.studentTimetables.length) parts.push(`Students ${before.studentTimetables.length}→${studentTimetables.length}`);
+                if (parts.length) logActivity('Applied Data Setup changes', parts.join(', '));
+            }
             rebuildTaDatabase();
             rebuildUnassignedPool();
             rebuildStudentSelector();
