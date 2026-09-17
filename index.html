@@ -1149,6 +1149,26 @@
         </div>
     </div>
 
+    <!-- Developer PIN — a second, separate unlock gating just Backups (Data
+         Setup) and Activity Log (Stats): tools a regular admin never needs
+         day to day, so they're hidden entirely (not just visible-but-locked)
+         until this is entered. Session-scoped like the main edit PIN — see
+         devUnlocked. -->
+    <div id="dev-pin-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-[70]">
+        <div class="bg-white rounded-xl shadow-xl p-6 w-80">
+            <h2 class="text-base font-bold text-gray-900 mb-1">🔧 Developer PIN</h2>
+            <p class="text-xs text-gray-500 mb-4">Reveals Backups and Activity Log — not needed for everyday admin use.</p>
+            <input id="dev-pin-modal-input" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-center text-lg tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-blue-400"
+                   onkeydown="if(event.key==='Enter') submitDevPinModal()">
+            <p id="dev-pin-modal-error" class="hidden text-xs text-red-500 mt-2 text-center">Incorrect PIN — try again.</p>
+            <div class="flex gap-2 mt-4">
+                <button onclick="closeDevPinModal()" class="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onclick="submitDevPinModal()" class="flex-1 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">Unlock</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Change-PIN modal, gated by an admin email check -->
     <div id="change-pin-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-[70]">
         <div class="bg-white rounded-xl shadow-xl p-6 w-80">
@@ -1641,7 +1661,10 @@
                 <button id="stats-tab-btn-coverlog" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('coverlog')">Cover Log</button>
                 <button id="stats-tab-btn-shortage" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('shortage')">Staff Shortage</button>
                 <button id="stats-tab-btn-acks" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('acks')">Acknowledgments</button>
-                <button id="stats-tab-btn-activity" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('activity')">Activity Log</button>
+                <!-- Hidden until the separate developer PIN is entered — see
+                     applyDevUnlockUI / DEVELOPER_PIN. Not everyday admin use. -->
+                <button id="stats-tab-btn-activity" class="hidden tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('activity')">Activity Log</button>
+                <button id="dev-unlock-link-stats" onclick="openDevPinModal()" class="ml-auto self-center text-[11px] text-gray-300 hover:text-gray-500" title="Developer tools">🔧</button>
             </div>
 
             <div class="p-6 overflow-y-auto flex-1 min-h-0">
@@ -1820,7 +1843,10 @@
                 <button id="data-tab-btn-students" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('students')">Students</button>
                 <button id="data-tab-btn-absences" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('absences')">Planned Absences</button>
                 <button id="data-tab-btn-exceptions" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('exceptions')">Calendar Exceptions</button>
-                <button id="data-tab-btn-backups" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('backups')">Backups</button>
+                <!-- Hidden until the separate developer PIN is entered — see
+                     applyDevUnlockUI / DEVELOPER_PIN. Not everyday admin use. -->
+                <button id="data-tab-btn-backups" class="hidden tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('backups')">Backups</button>
+                <button id="dev-unlock-link-data" onclick="openDevPinModal()" class="ml-auto self-center text-[11px] text-gray-300 hover:text-gray-500" title="Developer tools">🔧</button>
             </div>
 
             <div class="p-6 overflow-y-auto flex-1">
@@ -2234,6 +2260,16 @@
         let editUnlocked = false;
         try { editUnlocked = sessionStorage.getItem('ta_timetable_edit_unlocked') === '1'; } catch (e) {}
 
+        // A second, separate unlock gating just Backups and Activity Log —
+        // tools for diagnosing/recovering from a problem, not everyday admin
+        // work, so they're hidden entirely rather than just visible-but-
+        // locked (see applyDevUnlockUI). A fixed constant, not stored in the
+        // shared state/Supabase — edit it directly if it ever needs to
+        // change, same as SUPER_ADMIN_EMAILS above.
+        const DEVELOPER_PIN = '13579';
+        let devUnlocked = false;
+        try { devUnlocked = sessionStorage.getItem('ta_timetable_dev_unlocked') === '1'; } catch (e) {}
+
         // Bump CHANGELOG_VERSION and update CHANGELOG_ITEMS with every shipped
         // update — see showChangelogIfNew, called on a successful shared-PIN
         // unlock ("admin login" — the closest thing this app has to one), and
@@ -2491,6 +2527,42 @@
                 document.getElementById('pin-modal-error').classList.remove('hidden');
             }
         }
+
+        function openDevPinModal() {
+            document.getElementById('dev-pin-modal').classList.remove('hidden');
+            document.getElementById('dev-pin-modal-error').classList.add('hidden');
+            const input = document.getElementById('dev-pin-modal-input');
+            input.value = '';
+            setTimeout(() => input.focus(), 50);
+        }
+        function closeDevPinModal() {
+            document.getElementById('dev-pin-modal').classList.add('hidden');
+        }
+        function submitDevPinModal() {
+            const val = document.getElementById('dev-pin-modal-input').value;
+            if (val === DEVELOPER_PIN) {
+                devUnlocked = true;
+                try { sessionStorage.setItem('ta_timetable_dev_unlocked', '1'); } catch (e) {}
+                closeDevPinModal();
+                applyDevUnlockUI();
+            } else {
+                document.getElementById('dev-pin-modal-error').classList.remove('hidden');
+            }
+        }
+
+        // Shows/hides the Backups and Activity Log tabs (and the little
+        // "Developer Tools" unlock links themselves) based on devUnlocked —
+        // called on page load and right after a successful dev-PIN entry.
+        function applyDevUnlockUI() {
+            const ids = ['data-tab-btn-backups', 'stats-tab-btn-activity', 'dev-unlock-link-data', 'dev-unlock-link-stats'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const isUnlockLink = id.startsWith('dev-unlock-link-');
+                el.classList.toggle('hidden', isUnlockLink ? devUnlocked : !devUnlocked);
+            });
+        }
+
         function lockEditingNow() {
             editUnlocked = false;
             try { sessionStorage.removeItem('ta_timetable_edit_unlocked'); } catch (e) {}
@@ -6078,6 +6150,7 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             applyLockUI();
+            applyDevUnlockUI();
             initSidebarCollapse();
             syncPanelHeights();
             fitAdaptiveTimetable();
