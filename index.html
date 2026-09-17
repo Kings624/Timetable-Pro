@@ -1116,6 +1116,10 @@
          See updateUpcomingAbsenceBadge / plannedAbsences. -->
     <div id="upcoming-absence-banner" onclick="openPlannedAbsencesFromBadge()" class="hidden bg-amber-50 border-b border-amber-200 text-amber-800 text-xs px-4 py-1.5 text-center cursor-pointer hover:bg-amber-100 transition-colors"></div>
 
+    <!-- See updateCalendarExceptionBanner / calendarExceptions — a holiday,
+         INSET day, or exam week that includes today. Purely informational. -->
+    <div id="calendar-exception-banner" onclick="openCalendarExceptionsFromBanner()" class="hidden bg-sky-50 border-b border-sky-200 text-sky-800 text-xs px-4 py-1.5 text-center cursor-pointer hover:bg-sky-100 transition-colors"></div>
+
     <!-- PIN entry modal -->
     <div id="pin-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-[70]">
         <div class="bg-white rounded-xl shadow-xl p-6 w-80">
@@ -1803,6 +1807,7 @@
                 <button id="data-tab-btn-tas" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('tas')">TA List</button>
                 <button id="data-tab-btn-students" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('students')">Students</button>
                 <button id="data-tab-btn-absences" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('absences')">Planned Absences</button>
+                <button id="data-tab-btn-exceptions" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('exceptions')">Calendar Exceptions</button>
                 <button id="data-tab-btn-backups" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('backups')">Backups</button>
             </div>
 
@@ -1924,6 +1929,30 @@
                             </tr>
                         </thead>
                         <tbody id="planned-absences-tbody"></tbody>
+                    </table>
+                </div>
+
+                <!-- Calendar Exceptions — the lightweight alternative to a real
+                     calendar (see the note on `calendarExceptions` above): a
+                     purely informational banner for a holiday/INSET/exam
+                     week, not an automatic reshaping of the timetable. -->
+                <div id="data-tab-exceptions" class="hidden">
+                    <p class="text-xs text-gray-500 mb-3">Mark a holiday, INSET day, or exam week so a banner reminds everyone there's no normal cover needed — this doesn't change anyone's timetable, just flags the date(s). Leave "To" blank for a single day. Past entries drop off this list on their own.</p>
+                    <div class="flex justify-between items-center mb-3">
+                        <span></span>
+                        <button onclick="addCalendarExceptionRow()" class="bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-md text-xs font-medium">+ Add Row</button>
+                    </div>
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+                            <tr>
+                                <th class="px-2 py-2 text-left">Type</th>
+                                <th class="px-2 py-2 text-left">From</th>
+                                <th class="px-2 py-2 text-left">To</th>
+                                <th class="px-2 py-2 text-left">Label</th>
+                                <th class="px-2 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="calendar-exceptions-tbody"></tbody>
                     </table>
                 </div>
 
@@ -2603,6 +2632,10 @@
                 plannedAbsences.length = 0;
                 state.plannedAbsences.forEach(p => plannedAbsences.push(p));
             }
+            if (Array.isArray(state.calendarExceptions)) {
+                calendarExceptions.length = 0;
+                state.calendarExceptions.forEach(c => calendarExceptions.push(c));
+            }
             // Not touched by undo/redo (those snapshots don't carry history —
             // see buildCoreStateSnapshot) — only a real load (cloud pull, file
             // import, page load) restores it.
@@ -2640,6 +2673,7 @@
                 taListData: taListData,
                 coverHistory: coverHistory,
                 plannedAbsences: plannedAbsences,
+                calendarExceptions: calendarExceptions,
                 currentActiveTA: currentActiveTA,
                 sharedAdminPin: sharedAdminPin,
                 savedAt: new Date().toISOString()
@@ -2881,6 +2915,8 @@
             initCoverButtons();
             cleanUpPastPlannedAbsences();
             updateUpcomingAbsenceBadge();
+            cleanUpPastCalendarExceptions();
+            updateCalendarExceptionBanner();
         }
 
         // Rebuild the navbar TA <select> from whatever is actually in taDatabase
@@ -3072,6 +3108,16 @@
         // it just surfaces "don't forget" until the date arrives, then drops
         // off the list on its own (see cleanUpPastPlannedAbsences).
         let plannedAbsences = [];
+
+        // A whole-school exception day (holiday/INSET/exam week/other) — the
+        // lightweight alternative to a real calendar: this app has no
+        // mapping from a real date to the Week A/B rotation, so this doesn't
+        // try to suspend or reshape the timetable itself, it's purely an
+        // informational banner ("don't arrange cover today, there's no
+        // school") for whichever date range it covers. endDate defaults to
+        // date itself for a single day; past entries drop off the list the
+        // same way plannedAbsences does (see cleanUpPastCalendarExceptions).
+        let calendarExceptions = [];
 
         // Permanent log of past Find Cover assignments (see assignCover),
         // independent of the live timetable — a cover entry itself only
@@ -6033,6 +6079,8 @@
             revertExpiredCovers(); // clean up any Find Cover assignment left over from a previous day, before the first render
             cleanUpPastPlannedAbsences();
             updateUpcomingAbsenceBadge();
+            cleanUpPastCalendarExceptions();
+            updateCalendarExceptionBanner();
 
             initCoverButtons();
             rebuildStudentSelector();
@@ -7476,6 +7524,8 @@
             renderStudentListTable();
             cleanUpPastPlannedAbsences();
             renderPlannedAbsencesTab();
+            cleanUpPastCalendarExceptions();
+            renderCalendarExceptionsTab();
             renderBackupsTab();
             document.getElementById('data-modal').classList.remove('hidden');
         }
@@ -7505,6 +7555,7 @@
                 tas: document.getElementById('data-tab-tas'),
                 students: document.getElementById('data-tab-students'),
                 absences: document.getElementById('data-tab-absences'),
+                exceptions: document.getElementById('data-tab-exceptions'),
                 backups: document.getElementById('data-tab-backups')
             };
             const btns = {
@@ -7512,6 +7563,7 @@
                 tas: document.getElementById('data-tab-btn-tas'),
                 students: document.getElementById('data-tab-btn-students'),
                 absences: document.getElementById('data-tab-btn-absences'),
+                exceptions: document.getElementById('data-tab-btn-exceptions'),
                 backups: document.getElementById('data-tab-btn-backups')
             };
             Object.keys(panels).forEach(key => {
@@ -7691,6 +7743,93 @@
         function openPlannedAbsencesFromBadge() {
             openDataModal();
             switchDataTab('absences');
+        }
+
+        // -- Calendar Exceptions (lightweight — see the note on `calendarExceptions` above) --
+
+        const CALENDAR_EXCEPTION_TYPES = {
+            holiday: { label: 'Holiday', emoji: '🏖️' },
+            inset: { label: 'INSET Day', emoji: '📚' },
+            exam: { label: 'Exam Week', emoji: '📝' },
+            other: { label: 'Other', emoji: '📌' }
+        };
+
+        // Drops anything whose range has fully passed — same reasoning as
+        // cleanUpPastPlannedAbsences: a notice for a date that's already
+        // gone by has nothing left to flag.
+        function cleanUpPastCalendarExceptions() {
+            const today = getUKDateString();
+            const before = calendarExceptions.length;
+            calendarExceptions = calendarExceptions.filter(c => (c.endDate || c.date) >= today);
+            if (calendarExceptions.length !== before) updateCalendarExceptionBanner();
+        }
+
+        function renderCalendarExceptionsTab() {
+            const tbody = document.getElementById('calendar-exceptions-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            if (!calendarExceptions.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="px-2 py-4 text-center text-gray-400 text-sm">No holidays, INSET days, or exam weeks registered</td></tr>`;
+                return;
+            }
+            const sorted = [...calendarExceptions].sort((a, b) => a.date.localeCompare(b.date));
+            sorted.forEach(entry => {
+                const idx = calendarExceptions.indexOf(entry);
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100';
+                tr.innerHTML = `
+                    <td class="px-2 py-1">
+                        <select onchange="updateCalendarExceptionField(${idx}, 'type', this.value)" class="border border-gray-200 rounded px-2 py-1 text-sm">
+                            ${Object.entries(CALENDAR_EXCEPTION_TYPES).map(([key, t]) => `<option value="${key}" ${key === entry.type ? 'selected' : ''}>${t.emoji} ${t.label}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="px-2 py-1"><input type="date" value="${escapeHtml(entry.date)}" onchange="updateCalendarExceptionField(${idx}, 'date', this.value)" class="border border-gray-200 rounded px-2 py-1 text-sm"></td>
+                    <td class="px-2 py-1"><input type="date" value="${escapeHtml(entry.endDate || '')}" placeholder="(same day)" onchange="updateCalendarExceptionField(${idx}, 'endDate', this.value)" class="border border-gray-200 rounded px-2 py-1 text-sm"></td>
+                    <td class="px-2 py-1"><input type="text" value="${escapeHtml(entry.label || '')}" placeholder="e.g. May half term" oninput="updateCalendarExceptionField(${idx}, 'label', this.value)" class="w-full border border-gray-200 rounded px-2 py-1 text-sm"></td>
+                    <td class="px-2 py-1"><button onclick="removeCalendarExceptionRow(${idx})" title="Delete" class="text-gray-400 hover:text-red-500 text-sm px-1">✕</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateCalendarExceptionField(idx, field, value) {
+            calendarExceptions[idx][field] = value;
+            if (field === 'date' || field === 'endDate') { renderCalendarExceptionsTab(); updateCalendarExceptionBanner(); }
+        }
+
+        function addCalendarExceptionRow() {
+            calendarExceptions.push({ id: 'exception-' + Date.now(), type: 'holiday', date: getUKDateString(), endDate: '', label: '' });
+            renderCalendarExceptionsTab();
+        }
+
+        function removeCalendarExceptionRow(idx) {
+            calendarExceptions.splice(idx, 1);
+            renderCalendarExceptionsTab();
+            updateCalendarExceptionBanner();
+        }
+
+        // Purely informational — this doesn't suspend or reshape anyone's
+        // timetable (this app has no calendar linking a real date to the
+        // Week A/B rotation to reshape in the first place), it just flags
+        // today with a banner so cover doesn't get arranged for a day
+        // there's no school.
+        function updateCalendarExceptionBanner() {
+            const banner = document.getElementById('calendar-exception-banner');
+            if (!banner) return;
+            const today = getUKDateString();
+            const match = calendarExceptions.find(c => c.date <= today && (c.endDate || c.date) >= today);
+            if (match) {
+                const meta = CALENDAR_EXCEPTION_TYPES[match.type] || CALENDAR_EXCEPTION_TYPES.other;
+                banner.textContent = `${meta.emoji} ${meta.label} today${match.label ? ' — ' + match.label : ''} — no cover needed`;
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
+        function openCalendarExceptionsFromBanner() {
+            openDataModal();
+            switchDataTab('exceptions');
         }
 
         // -- Apply: turn the two input tables into the live unassigned pool + TA database --
