@@ -823,6 +823,95 @@
             }
         }
 
+        /* Phone-width browsing (viewing, not editing — dragging classes into
+           the grid isn't a touch interaction on any mobile browser, so this
+           is purely about making the page itself usable on a phone screen).
+           768px matches Tailwind's own `md` breakpoint elsewhere in this file. */
+        @media (max-width: 767px) {
+            /* .tools-sidebar's zoom:1.4 (a desktop text-size accessibility
+               bump — see the rule itself further up) makes its actual 320px
+               (w-80) render at ~448px, which alone is wider than most phone
+               screens and was cutting off the search boxes inside it. Not
+               needed on a screen this narrow anyway — see initSidebarCollapse
+               below, which also defaults this sidebar to collapsed here. */
+            .tools-sidebar {
+                zoom: 1;
+            }
+            /* iOS Safari (not Android Chrome — this is exactly the kind of
+               divergence that prompted this block) force-zooms the whole
+               page in when a focused input/select/textarea computes to a
+               font-size under 16px. Most inputs here use Tailwind's
+               text-sm/text-xs (14px/12px) for a denser desktop table look;
+               !important is needed since those are class selectors and would
+               otherwise win over this plain-element one. */
+            input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+                font-size: 16px !important;
+            }
+            /* Momentum scrolling + no scroll-chaining to the page behind a
+               modal/panel — the default on Android Chrome either way, but
+               both need spelling out for iOS Safari. Targets every scrollable
+               panel/modal body (all built with Tailwind's overflow-y-auto)
+               without having to touch each one individually. */
+            .tools-sidebar, .main-panel, [class*="overflow-y-auto"] {
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+            }
+            /* The timetable grid (5 day columns) has no horizontal-scroll
+               container of its own, so on a phone-width screen its overflow
+               was bubbling up to the whole page — scrolling right to see
+               Thu/Fri dragged the navbar and sidebar rail off-screen with it.
+               Containing it here instead keeps the nav reachable and only
+               pans the grid itself. */
+            .main-panel {
+                overflow-x: auto;
+            }
+            /* Same problem, worse spot: the navbar's right-hand button group
+               (TA picker, undo/redo, My Day/Search/Stats/Export/Compare,
+               Lock, Save Changes…) is built for a wide desktop window and
+               was pushing the whole page ~2.3x wider than a phone screen —
+               scrolling right to reach "Save Changes" dragged the logo and
+               TA name on the left out of view with it. shrink-0/min-width:0
+               here override the desktop shrink-0 (which assumed the group
+               would always just fit) so the group itself scrolls instead. */
+            .nav-actions {
+                flex-shrink: 1 !important;
+                min-width: 0 !important;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+            }
+            .nav-actions::-webkit-scrollbar {
+                display: none;
+            }
+            /* #stats-modal-card's inline min-width:640px (sized for its
+               widest tab, Acknowledgments, on a desktop window) is wider
+               than any phone — its own max-width:97vw couldn't win against
+               that min-width, so the whole card sat cut off on both edges.
+               !important is needed to beat the inline style itself. */
+            #stats-modal-card {
+                width: 94vw !important;
+                min-width: 0 !important;
+            }
+            /* Both Stats and Data Setup have more tabs (Overview/Cover Log/
+               Staff Shortage/Acknowledgments…, or Class Needs/TA List/
+               Students/Planned Absences/Calendar Exceptions…) than a phone
+               width fits — their modal cards clip overflow, so an
+               unreachable tab wasn't just cut off visually, it couldn't be
+               tapped at all. Letting the tab row itself scroll keeps every
+               tab reachable by swiping. */
+            .modal-tabs-row {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                flex-wrap: nowrap !important;
+            }
+            .modal-tabs-row::-webkit-scrollbar {
+                display: none;
+            }
+            .modal-tabs-row .tab-btn {
+                flex-shrink: 0;
+            }
+        }
+
         /* Print-only timetable (built dynamically by exportTimetableToPDF) —
            hidden on screen, shown only inside the print dialog */
         #printable-timetable {
@@ -1010,7 +1099,7 @@
             <button id="cloud-status-hint" onclick="refreshFromCloud()" title="Newer data available — click to refresh" class="hidden w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0"></button>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="nav-actions flex items-center gap-2 shrink-0">
             <div class="flex items-center gap-1.5">
                 <span class="text-sm font-medium text-gray-600 hidden md:inline">TA:</span>
                 <select id="ta-selector" onchange="switchActiveTA(this.value)" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 font-semibold">
@@ -1655,7 +1744,7 @@
             <!-- Tabs — split out once Acknowledgments joined Cover Log and Staff
                  Shortage below the main table; one continuous scroll was
                  getting crowded. -->
-            <div class="px-6 pt-3 border-b border-gray-200 flex gap-2 shrink-0">
+            <div class="modal-tabs-row px-6 pt-3 border-b border-gray-200 flex gap-2 shrink-0">
                 <button id="stats-tab-btn-overview" class="tab-btn active px-4 py-2 text-sm" onclick="switchStatsTab('overview')">Overview</button>
                 <button id="stats-tab-btn-coverlog" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('coverlog')">Cover Log</button>
                 <button id="stats-tab-btn-shortage" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchStatsTab('shortage')">Staff Shortage</button>
@@ -1836,7 +1925,7 @@
             </div>
 
             <!-- Tabs -->
-            <div class="px-6 pt-3 border-b border-gray-200 flex gap-2">
+            <div class="modal-tabs-row px-6 pt-3 border-b border-gray-200 flex gap-2">
                 <button id="data-tab-btn-needs" class="tab-btn active px-4 py-2 text-sm" onclick="switchDataTab('needs')">Class Needs</button>
                 <button id="data-tab-btn-tas" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('tas')">TA List</button>
                 <button id="data-tab-btn-students" class="tab-btn px-4 py-2 text-sm text-gray-600" onclick="switchDataTab('students')">Students</button>
@@ -6078,9 +6167,12 @@
             // accessibility rule above) — the px height assigned to it is
             // "local" to that zoomed context, so divide by the zoom factor
             // here or the on-screen (real) rendered size ends up 1.4x taller
-            // than the space actually available.
+            // than the space actually available. That zoom is switched off
+            // below 768px (see the phone-width media query above), so match
+            // the same breakpoint here or the two disagree on phones.
             const sidebar = document.querySelector('.tools-sidebar');
-            if (sidebar) sidebar.style.height = Math.round(available / 1.4) + 'px';
+            const sidebarZoom = document.documentElement.clientWidth < 768 ? 1 : 1.4;
+            if (sidebar) sidebar.style.height = Math.round(available / sidebarZoom) + 'px';
             const mainPanel = document.querySelector('.main-panel');
             if (mainPanel) mainPanel.style.height = available + 'px';
         }
@@ -6137,8 +6229,13 @@
             try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) {}
         }
         function initSidebarCollapse() {
-            let collapsed = false;
-            try { collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'; } catch (e) {}
+            let stored = null;
+            try { stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY); } catch (e) {}
+            // No explicit preference saved yet: default to collapsed on a
+            // phone-width screen, where the sidebar's fixed 320px would
+            // otherwise eat most of the screen before the timetable itself
+            // is even visible. Once anyone toggles it, that choice sticks.
+            const collapsed = stored !== null ? stored === '1' : document.documentElement.clientWidth < 768;
             if (collapsed) {
                 const aside = document.getElementById('sidebar-aside');
                 const btn = document.getElementById('sidebar-toggle-btn');
