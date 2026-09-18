@@ -975,7 +975,6 @@
                 flex-shrink: 0;
             }
             .print-badge-cover { background: #d1fae5; color: #065f46; }
-            .print-badge-duty { background: #ede9fe; color: #5b21b6; }
             .print-cell-cover { background: #f0fdf4; }
             .print-cell-duty { background: #faf5ff; }
             /* Student timetable export only — which TA (if any) covers each period */
@@ -6398,9 +6397,14 @@
             // makes clear which periods are a one-off cover, not their normal slot.
             const isCovering = !!(entry.html && entry.html.includes('data-cover-origin'));
             const isDuty = !!classData.isDuty;
+            // Duty entries (Lunch/Admin/Intervention etc.) keep their tinted
+            // cell background (print-cell-duty below) but no longer get a
+            // "Duty" text badge on the printed page — just the Cover one,
+            // which still matters for telling a one-off cover slot apart
+            // from someone's normal timetable.
             const badge = isCovering
                 ? '<span class="print-badge print-badge-cover">Cover</span>'
-                : (isDuty ? '<span class="print-badge print-badge-duty">Duty</span>' : '');
+                : '';
             const detailParts = [teacher, room].filter(Boolean);
             const cellClass = 'print-cell' + (isCovering ? ' print-cell-cover' : '') + (isDuty ? ' print-cell-duty' : '');
 
