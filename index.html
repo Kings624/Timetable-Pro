@@ -823,11 +823,46 @@
             }
         }
 
+        /* Hamburger toggle for .nav-actions below — desktop never shows it,
+           since the button group is simply always visible there. Same for
+           #mobile-day-view (see renderMobileDayView) — desktop keeps the
+           real grid; only the phone-width media query below swaps them. */
+        .mobile-menu-toggle-btn {
+            display: none;
+        }
+        #mobile-day-view {
+            display: none;
+        }
+        #mobile-day-picker::-webkit-scrollbar {
+            display: none;
+        }
+
         /* Phone-width browsing (viewing, not editing — dragging classes into
            the grid isn't a touch interaction on any mobile browser, so this
            is purely about making the page itself usable on a phone screen).
-           768px matches Tailwind's own `md` breakpoint elsewhere in this file. */
+           768px matches Tailwind's own `md` breakpoint elsewhere in this file.
+
+           The main grid (5 day columns × 7 periods) doesn't fit a phone
+           screen at any usable text size, and editing it needs a mouse-drag
+           gesture no phone browser supports anyway — so instead of shrinking
+           it, phones get a completely different view of the same data: one
+           day at a time, as a plain vertical list (#mobile-day-view, styled
+           like My Day — see renderMobileDayView), which needs nothing but
+           ordinary up/down scrolling to read in full. */
         @media (max-width: 767px) {
+            #timetable-grid-container, #timetable-legend-row {
+                display: none !important;
+            }
+            #mobile-day-view {
+                display: block !important;
+            }
+            /* The Week A/B toggle's px-6 padding (sized for a roomy desktop
+               window) left too little space for "Ⓐ Week A" on the smallest
+               phones, wrapping it onto two lines inside the pill. */
+            #btn-week-a, #btn-week-b {
+                padding-left: 0.875rem !important;
+                padding-right: 0.875rem !important;
+            }
             /* .tools-sidebar's zoom:1.4 (a desktop text-size accessibility
                bump — see the rule itself further up) makes its actual 320px
                (w-80) render at ~448px, which alone is wider than most phone
@@ -868,20 +903,33 @@
             /* Same problem, worse spot: the navbar's right-hand button group
                (TA picker, undo/redo, My Day/Search/Stats/Export/Compare,
                Lock, Save Changes…) is built for a wide desktop window and
-               was pushing the whole page ~2.3x wider than a phone screen —
-               scrolling right to reach "Save Changes" dragged the logo and
-               TA name on the left out of view with it. shrink-0/min-width:0
-               here override the desktop shrink-0 (which assumed the group
-               would always just fit) so the group itself scrolls instead. */
+               was pushing the whole page ~2.3x wider than a phone screen.
+               Tucked away behind #mobile-menu-toggle-btn (see below) instead
+               of left scrollable-but-visible — a phone screen is too narrow
+               to spare any of it permanently, per the "collapse the toolbar,
+               summon it only when needed" brief. Reopened as a full-width
+               dropdown (.mobile-menu-open) rather than sitting inline. */
             .nav-actions {
-                flex-shrink: 1 !important;
-                min-width: 0 !important;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                overscroll-behavior: contain;
-            }
-            .nav-actions::-webkit-scrollbar {
                 display: none;
+            }
+            .nav-actions.mobile-menu-open {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                position: fixed;
+                top: 4rem;
+                left: 0;
+                right: 0;
+                background: white;
+                box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.2);
+                padding: 0.75rem 1rem;
+                gap: 0.625rem;
+                max-height: calc(100vh - 4rem);
+                overflow-y: auto;
+                z-index: 60;
+            }
+            .mobile-menu-toggle-btn {
+                display: inline-flex;
             }
             /* #stats-modal-card's inline min-width:640px (sized for its
                widest tab, Acknowledgments, on a desktop window) is wider
@@ -1098,6 +1146,16 @@
                  and would overlap neighbouring items on narrower windows. -->
             <button id="cloud-status-hint" onclick="refreshFromCloud()" title="Newer data available — click to refresh" class="hidden w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0"></button>
         </div>
+
+        <!-- Phone-width only (see .mobile-menu-toggle-btn) — everything in
+             .nav-actions opposite is tucked behind this until tapped, so a
+             narrow screen isn't stuck permanently spending space on tools
+             most visits don't need. See toggleMobileNavMenu(). -->
+        <button id="mobile-menu-toggle-btn" onclick="toggleMobileNavMenu()" title="Menu" class="mobile-menu-toggle-btn items-center justify-center w-9 h-9 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
 
         <div class="nav-actions flex items-center gap-2 shrink-0">
             <div class="flex items-center gap-1.5">
@@ -1439,9 +1497,13 @@
                 <button id="btn-week-b" class="tab-btn px-6 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-all" onclick="toggleWeek('B')">Ⓑ Week B</button>
             </div>
 
-            <!-- Timetable Container -->
-            <div class="w-full max-w-6xl bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-                
+            <!-- Timetable Container — desktop/tablet only below 767px (see
+                 #mobile-day-view instead, further down); hiding just the
+                 header/body/legend individually would leave this wrapper's
+                 own border+shadow behind as an empty box, so it's the one
+                 that's actually hidden. -->
+            <div id="timetable-grid-container" class="w-full max-w-6xl bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
+
                 <!-- Header row — shared by both weeks (only one body is ever visible
                      at a time), so its own week-tint is toggled in JS by toggleWeek()
                      rather than scoped by #timetable-body-a/b like the rest of the
@@ -1580,7 +1642,18 @@
                 </div>
 
             </div>
-            
+
+            <!-- Phone-width only (see the media query above and
+                 renderMobileDayView) — the same data as the grid above, one
+                 day at a time as a plain scrollable list, since dragging a
+                 class onto a grid isn't something any phone browser's touch
+                 input can do anyway. Defaults to today; tap a day pill to
+                 look at another. -->
+            <div id="mobile-day-view" class="w-full max-w-md">
+                <div id="mobile-day-picker" class="flex gap-1.5 mb-4 overflow-x-auto"></div>
+                <div id="mobile-day-list" class="space-y-2"></div>
+            </div>
+
             <!-- Contextual Help / Status -->
             <div id="timetable-legend-row" class="mt-4 flex items-center gap-6 text-sm text-gray-500">
                 <div class="flex items-center gap-2">
@@ -5150,6 +5223,7 @@
             initCoverButtons();
             checkCoverAcknowledgment();
             checkChangelogAcknowledgment();
+            renderMobileDayView(); // keeps the phone-width view (see below) in sync with everything above
         }
 
         // Shared Week/Day/Period labels for anywhere cover events get listed
@@ -5630,6 +5704,89 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        // Phone-width replacement for the main grid (see #mobile-day-view
+        // and the max-width:767px media query) — same currentActiveTA/week
+        // the grid would show, just one day at a time, rendered the same
+        // way My Day renders a day's periods above. Defaults to today.
+        let mobileSelectedDay = (() => {
+            const today = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
+            return DAY_OPTIONS.includes(today) ? today : DAY_OPTIONS[0];
+        })();
+
+        function setMobileDay(day) {
+            mobileSelectedDay = day;
+            renderMobileDayView();
+        }
+
+        // Called from loadTimetableForActiveTA() and toggleWeek() — the same
+        // two places that already repaint the desktop grid whenever the
+        // active TA, week, or underlying data changes, so this stays in
+        // sync with no extra call sites to track.
+        function renderMobileDayView() {
+            const picker = document.getElementById('mobile-day-picker');
+            const list = document.getElementById('mobile-day-list');
+            if (!picker || !list) return;
+
+            const ta = taDatabase.find(t => t.id === currentActiveTA);
+            if (!ta) return;
+
+            const week = document.getElementById('timetable-body-a').classList.contains('hidden') ? 'B' : 'A';
+            const todayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
+
+            picker.innerHTML = DAY_OPTIONS.map(day => {
+                const isActive = day === mobileSelectedDay;
+                return `<button type="button" onclick="setMobileDay('${day}')"
+                    class="shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors ${isActive ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-600'}">
+                    ${escapeHtml(day)}${day === todayShort ? ' •' : ''}
+                </button>`;
+            }).join('');
+
+            const today = getUKDateString();
+            list.innerHTML = PERIOD_OPTIONS.map(period => {
+                const entry = ta.timetables[week] && ta.timetables[week][mobileSelectedDay] && ta.timetables[week][mobileSelectedDay][period];
+                const timeLabel = PERIOD_TIME_LABELS[period] || '';
+
+                let bodyHtml;
+                if (!entry) {
+                    bodyHtml = `<span class="text-gray-400 italic text-sm">Free period</span>`;
+                } else {
+                    let title = 'Class', teacher = '', room = '';
+                    try {
+                        const cd = JSON.parse(entry.classData || '{}');
+                        title = cd.title || title;
+                        teacher = cd.teacher || '';
+                        room = cd.room || '';
+                    } catch (e) { /* fall back to the plain "Class" label above */ }
+                    const metaLine = [teacher, room].filter(Boolean).join(' · ');
+                    bodyHtml = `<div class="font-medium text-gray-800 text-sm">${escapeHtml(title)}</div>` +
+                        (metaLine ? `<div class="text-xs text-gray-500 mt-0.5">${escapeHtml(metaLine)}</div>` : '');
+                }
+
+                const coverEvent = coverHistory.find(h => h.date === today && h.week === week && h.day === mobileSelectedDay && h.period === period && (h.absentTaId === ta.id || h.coveringTaId === ta.id));
+                let coverBadge = '';
+                if (coverEvent) {
+                    const isAbsentSide = coverEvent.absentTaId === ta.id;
+                    const label = isAbsentSide
+                        ? `Covered by ${escapeHtml(coverEvent.coveringTaName)}`
+                        : `Covering for ${escapeHtml(coverEvent.absentTaName)}`;
+                    coverBadge = `<div class="mt-1.5"><span class="text-[11px] text-emerald-700 bg-emerald-50 rounded px-2 py-0.5">🦋 ${label}</span></div>`;
+                }
+
+                return `
+                    <div class="border border-gray-200 rounded-lg px-3 py-2.5 ${entry ? 'bg-white' : 'bg-gray-50'}">
+                        <div class="flex justify-between items-start gap-3">
+                            <div class="text-[11px] text-gray-400 font-medium shrink-0 w-16 leading-tight">P${escapeHtml(period)}<br>${escapeHtml(timeLabel)}</div>
+                            <div class="flex-1 min-w-0">${bodyHtml}${coverBadge}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleMobileNavMenu() {
+            document.querySelector('.nav-actions').classList.toggle('mobile-menu-open');
         }
 
         // Mirrors acknowledgeCoverNotices()'s cloud-sync pattern (merge just
@@ -6149,6 +6306,7 @@
                 if (headerRow) headerRow.classList.replace('week-a-active', 'week-b-active');
             }
             fitAdaptiveTimetable();
+            renderMobileDayView(); // the phone-width view reads the same bodyA/B hidden-class check for "current week"
         }
 
         // Drag and Drop Logic
@@ -6251,6 +6409,29 @@
             syncPanelHeights();
             fitAdaptiveTimetable();
             makeJanicePanelDraggable();
+
+            // Mobile nav drawer (see toggleMobileNavMenu / .mobile-menu-open):
+            // closes itself after any button inside is used, and on an
+            // outside tap — otherwise it would just sit open over the
+            // timetable after, say, hitting "Save Changes".
+            const navActionsEl = document.querySelector('.nav-actions');
+            if (navActionsEl) {
+                // Not 'select' here — its own click just opens the dropdown,
+                // so closing the drawer on that click would yank it away
+                // before a TA could actually be picked. 'change' (below)
+                // fires once a choice is made instead.
+                navActionsEl.addEventListener('click', (e) => {
+                    if (e.target.closest('button, a')) navActionsEl.classList.remove('mobile-menu-open');
+                });
+                navActionsEl.addEventListener('change', (e) => {
+                    if (e.target.id === 'ta-selector') navActionsEl.classList.remove('mobile-menu-open');
+                });
+            }
+            document.addEventListener('click', (e) => {
+                if (!navActionsEl || !navActionsEl.classList.contains('mobile-menu-open')) return;
+                if (navActionsEl.contains(e.target) || e.target.closest('#mobile-menu-toggle-btn')) return;
+                navActionsEl.classList.remove('mobile-menu-open');
+            });
             const draggables = document.querySelectorAll('.draggable-class');
             const dropZones = document.querySelectorAll('.drop-zone');
             const unassignedList = document.getElementById('unassigned-list');
